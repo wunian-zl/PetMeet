@@ -1,0 +1,14 @@
+<svg width="800" height="450" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="springGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff9a9e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fecfef;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="800" height="450" fill="url(#springGrad)" />
+  <circle cx="100" cy="100" r="50" fill="white" opacity="0.2" />
+  <circle cx="700" cy="350" r="80" fill="white" opacity="0.2" />
+  <path d="M400,150 Q450,50 500,150 T600,150" fill="none" stroke="white" stroke-width="5" opacity="0.5" />
+  <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-size="48" fill="white" font-weight="bold">Spring Sale</text>
+  <text x="50%" y="65%" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="white">Up to 50% Off</text>
+</svg>

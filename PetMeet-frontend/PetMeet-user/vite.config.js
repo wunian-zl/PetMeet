@@ -1,0 +1,30 @@
+import { fileURLToPath, URL } from 'node:url'
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+
+// Vite 配置说明：https://vite.dev/config/
+export default defineConfig({
+  plugins: [vue()],
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url))
+    }
+  },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/files': {
+        target: 'http://localhost:8080',
+        changeOrigin: true
+      },
+      '/images': {
+        target: 'http://localhost:8080',
+        changeOrigin: true
+      }
+    }
+  }
+})

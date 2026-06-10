@@ -1,0 +1,18 @@
+:root {
+    --el-color-primary: #3f6fd9;
+    --el-color-primary-dark-2: #325ab3;
+    --el-color-primary-light-3: #6f93e3;
+    --el-color-primary-light-5: #93afea;
+    --el-color-primary-light-7: #b8cbf2;
+    --el-color-primary-light-8: #d2def8;
+    --el-color-primary-light-9: #ecf1fd;
+    --admin-professional-primary: #3f6fd9;
+    --admin-professional-primary-rgb: 63, 111, 217;
+    --admin-professional-soft: #ecf1fd;
+    --admin-sidebar-active: #ff6b81;
+}
+
+body {
+    margin: 0;
+    background-color: #f3f5f9;
+}

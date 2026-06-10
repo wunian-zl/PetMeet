@@ -1,0 +1,80 @@
+:root {
+  --el-color-primary: #ff6b81;
+  --el-color-primary-dark-2: #f45a72;
+  --el-color-primary-light-3: #ff8ea0;
+  --el-color-primary-light-5: #ffadb9;
+  --el-color-primary-light-7: #ffd1d8;
+  --el-color-primary-light-8: #ffe3e7;
+  --el-color-primary-light-9: #fff1f3;
+}
+
+body {
+  margin: 0;
+  background: #f5f7fa;
+}
+
+/* 全局消息弹窗样式 */
+.pm-msgbox {
+  border-radius: 16px !important;
+  border: none !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12) !important;
+}
+
+.pm-msgbox .el-message-box__header {
+  padding-top: 20px;
+}
+
+.pm-msgbox .el-message-box__title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.pm-msgbox .el-message-box__content {
+  padding: 24px 20px;
+  font-size: 15px;
+  color: #4b5563;
+}
+
+.pm-msgbox .el-message-box__btns {
+  padding-bottom: 20px;
+}
+
+.pm-msgbox .el-message-box__btns .el-button {
+  border-radius: 8px;
+  padding: 8px 20px;
+  margin-left: 12px;
+  font-weight: 500;
+}
+
+.pm-msgbox .el-message-box__btns .el-button--default:hover {
+  color: #ff6b81;
+  background: #fff0f3;
+  border-color: #ffcad4;
+}
+
+.pm-btn-primary {
+  background-color: #ff6b81 !important;
+  border-color: #ff6b81 !important;
+  color: #fff !important;
+  transition: all 0.2s;
+}
+
+.pm-btn-primary:hover,
+.pm-btn-primary:focus {
+  background-color: #ff4757 !important;
+  border-color: #ff4757 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 107, 129, 0.3);
+}
+
+.pm-btn-danger {
+  background-color: rgb(255, 122, 138) !important;
+  border-color: rgb(255, 122, 138) !important;
+  color: #fff !important;
+}
+
+.pm-btn-danger:hover,
+.pm-btn-danger:focus {
+  background-color: rgb(255, 102, 124) !important;
+  border-color: rgb(255, 102, 124) !important;
+}

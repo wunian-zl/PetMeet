@@ -1,0 +1,10 @@
+{
+  "name": "petmeet-root",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "dev": "powershell -ExecutionPolicy Bypass -File scripts\\open-frontends.ps1 -FrontendRoot .\\PetMeet-frontend",
+    "dev:admin": "npm --prefix PetMeet-frontend run dev:admin",
+    "dev:user": "npm --prefix PetMeet-frontend run dev:user"
+  }
+}
