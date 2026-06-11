@@ -126,10 +126,27 @@ mysql -u root -p < PetMeet-backend/sql/ddl.sql
 localhost:6379
 ```
 
-Windows环境也可以使用项目中的辅助脚本：
+> 仓库不包含本机的`PetMeet-backend/Redis`目录，该目录已被`.gitignore`排除。其他人克隆项目后，需要自行安装Redis或准备兼容的Redis服务。
+
+Windows环境中，如果`redis-server`和`redis-cli`已经加入系统`PATH`，可以使用项目中的辅助脚本：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/start-redis-if-needed.ps1
+```
+
+如果Redis未加入`PATH`，请通过`PETMEET_REDIS_DIR`指定包含`redis-server.exe`和`redis-cli.exe`的目录：
+
+```powershell
+$env:PETMEET_REDIS_DIR="C:\path\to\Redis"
+powershell -ExecutionPolicy Bypass -File scripts/start-redis-if-needed.ps1
+```
+
+也可以通过WSL或Docker运行Redis，只需确保Windows本机能够访问`127.0.0.1:6379`。
+
+启动后可执行以下命令进行验证，正常结果应为`PONG`：
+
+```powershell
+redis-cli -h 127.0.0.1 -p 6379 ping
 ```
 
 ### 4.启动后端
@@ -201,6 +218,7 @@ http://localhost:5174/admin/login
 | `PETMEET_ADMIN_PASSWORD` | 首次启动必填 | 数据库中不存在管理员时，用于创建初始管理员 |
 | `PETMEET_DB_USER` | 辅助脚本可选 | MySQL用户名，默认`root` |
 | `PETMEET_DB_NAME` | 辅助脚本可选 | 数据库名，默认`petmeet` |
+| `PETMEET_REDIS_DIR` | Redis辅助脚本可选 | Windows版Redis可执行文件所在目录；Redis已加入`PATH`时无需配置 |
 
 不要将真实密码写入`application.yml`或提交到Git仓库。IDEA配置方式可参考[后端环境变量说明](PetMeet-backend/ENVIRONMENT.md)。
 
