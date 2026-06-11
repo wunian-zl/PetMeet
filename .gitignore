@@ -6,7 +6,9 @@
 **/node_modules/
 **/dist/
 
-uploads/
+uploads/*
+!uploads/demo/
+!uploads/demo/**
 tmp_*/
 *.log
 

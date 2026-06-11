@@ -362,18 +362,66 @@ CREATE TABLE `cms_banner` (
     KEY `idx_sort` (`sort`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='养宠科普栏目配置表';
 
--- 示例数据：商城顶部的养宠科普卡片
+-- 演示用户：仅用于展示笔记作者，不提供默认登录账号
+INSERT INTO `sys_user` (`id`, `username`, `password`, `nickname`, `avatar`, `role`, `status`, `create_time`)
+VALUES
+    (1, 'petmeet_demo_mali', '$2a$10$XULeTe1Anp4n1uIt65TjgeK9XQpOgUwJhEoSjYaUwt0JbBD.LBCz.', '玛丽', '/images/demo/avatars/mali.jpg', 'user', 1, DATE_SUB(NOW(), INTERVAL 30 DAY)),
+    (2, 'petmeet_demo_user15', '$2a$10$XULeTe1Anp4n1uIt65TjgeK9XQpOgUwJhEoSjYaUwt0JbBD.LBCz.', '萌宠用户15', '/images/demo/avatars/user-15.jpg', 'user', 1, DATE_SUB(NOW(), INTERVAL 29 DAY)),
+    (3, 'petmeet_demo_user05', '$2a$10$XULeTe1Anp4n1uIt65TjgeK9XQpOgUwJhEoSjYaUwt0JbBD.LBCz.', '萌宠用户05', '/images/demo/avatars/user-05.jpg', 'user', 1, DATE_SUB(NOW(), INTERVAL 28 DAY)),
+    (4, 'petmeet_demo_user04', '$2a$10$XULeTe1Anp4n1uIt65TjgeK9XQpOgUwJhEoSjYaUwt0JbBD.LBCz.', '萌宠用户04', '/images/demo/avatars/user-04.jpg', 'user', 1, DATE_SUB(NOW(), INTERVAL 27 DAY));
+
+-- 演示商品分类
+INSERT INTO `pms_category` (`id`, `name`, `icon`, `sort`, `status`)
+VALUES
+    (1, '零食', '/category-icons/snack.svg', 10, 1),
+    (2, '清洁卫生', '/category-icons/poop-bag.svg', 20, 1),
+    (3, '玩具', '/category-icons/frisbee.svg', 30, 1),
+    (4, '狗粮', '/category-icons/dog-food.svg', 40, 1),
+    (5, '猫粮', '/category-icons/cat-food.svg', 50, 1),
+    (6, '服饰', '/category-icons/tshirt.svg', 60, 1);
+
+-- 演示商品：图片均来自本项目原有本地商品图片
+INSERT INTO `pms_product`
+    (`id`, `category_id`, `name`, `sub_title`, `price`, `stock`, `unit`, `version`, `cover_img`, `cover_imgs`, `detail_imgs`, `description`, `status`, `is_deleted`, `create_time`, `warning_stock`, `sort_weight`, `sales`, `pet_type`, `views`, `related_note_count`)
+VALUES
+    (1, 3, '长杆羽毛逗猫棒', '钢丝弹簧杆，适合日常互动和消耗精力', 32.00, 199, '支', 0, '/images/demo/products/cat-teaser.jpg', JSON_ARRAY('/images/demo/products/cat-teaser.jpg'), JSON_ARRAY('/images/demo/products/cat-teaser-detail.jpg'), '轻量长杆搭配弹簧结构，可替换逗猫头，适合室内陪玩。', 1, 0, DATE_SUB(NOW(), INTERVAL 7 DAY), 20, 90, 286, 'cat', 2380, 0),
+    (2, 6, '猫咪新年加绒背心', '新年喜庆，加绒保暖，轻便好穿', 39.90, 298, '件', 0, '/images/demo/products/cat-new-year-vest.jpg', JSON_ARRAY('/images/demo/products/cat-new-year-vest.jpg'), JSON_ARRAY('/images/demo/products/cat-new-year-vest-detail.jpg'), '适合猫咪冬季居家和短时外出穿着，背心版型活动方便。', 1, 0, DATE_SUB(NOW(), INTERVAL 6 DAY), 20, 85, 168, 'cat', 1860, 0),
+    (3, 6, '狗狗新春保暖外套', '加绒保暖，带牵引扣，适合小型犬', 49.90, 300, '件', 0, '/images/demo/products/dog-spring-coat.jpg', JSON_ARRAY('/images/demo/products/dog-spring-coat.jpg'), JSON_ARRAY('/images/demo/products/dog-spring-coat-detail.jpg'), '柔软面料配合保暖内层，适合秋冬季节日常穿着。', 1, 0, DATE_SUB(NOW(), INTERVAL 5 DAY), 20, 80, 152, 'dog', 1710, 0),
+    (4, 3, '彩虹猫咪隧道', '可折叠收纳，适合钻洞和追逐互动', 39.90, 198, '个', 0, '/images/demo/products/cat-tunnel.jpg', JSON_ARRAY('/images/demo/products/cat-tunnel.jpg'), JSON_ARRAY('/images/demo/products/cat-tunnel-detail.jpg'), 'S形彩虹隧道，展开后可供猫咪穿梭，闲置时可以折叠收纳。', 1, 0, DATE_SUB(NOW(), INTERVAL 4 DAY), 20, 75, 321, 'cat', 3290, 0),
+    (5, 3, '狗狗耐咬拉力圆环', '适合抛接、拉扯和磨牙互动', 29.90, 186, '个', 0, '/images/demo/products/dog-ring.jpg', JSON_ARRAY('/images/demo/products/dog-ring.jpg'), JSON_ARRAY('/images/demo/products/dog-ring-detail.jpg'), '弹性圆环适合主人与狗狗进行抛接和拉扯游戏。', 1, 0, DATE_SUB(NOW(), INTERVAL 3 DAY), 20, 95, 438, 'dog', 4260, 1),
+    (6, 1, '冻干牛肝训练零食', '小块分装，适合作为日常训练奖励', 19.90, 200, '袋', 0, '/images/demo/products/beef-liver-snack.webp', JSON_ARRAY('/images/demo/products/beef-liver-snack.webp'), JSON_ARRAY('/images/demo/products/beef-liver-snack-detail.jpg'), '牛肝切片冻干，喂食时应结合宠物体型控制用量。', 1, 0, DATE_SUB(NOW(), INTERVAL 2 DAY), 20, 70, 512, 'general', 5180, 0),
+    (7, 2, '宠物环境除味喷雾', '适合猫砂盆和宠物活动区域日常清洁', 23.90, 200, '瓶', 0, '/images/demo/products/pet-deodorizer.jpg', JSON_ARRAY('/images/demo/products/pet-deodorizer.jpg'), JSON_ARRAY('/images/demo/products/pet-deodorizer-detail.jpg'), '用于宠物活动区域的日常清洁和气味管理，使用前请阅读产品说明。', 1, 0, DATE_SUB(NOW(), INTERVAL 1 DAY), 20, 65, 196, 'general', 2030, 0);
+
+-- 演示笔记：图片均来自本项目原有本地笔记图片
+INSERT INTO `cms_note`
+    (`id`, `user_id`, `title`, `category`, `tags`, `content`, `cover_img`, `images`, `type`, `video_url`, `like_count`, `collect_count`, `status`, `is_deleted`, `is_recommended`, `is_sticky`, `audit_time`, `create_time`)
+VALUES
+    (1, 1, '宠物玩具终于到了', 'dog', '狗狗玩具,开箱实测,已购反馈', '玩具质量很好，没有异味，圆环适合抛接和拉扯互动。', '/images/demo/notes/toy-arrived.jpg', JSON_ARRAY('/images/demo/notes/toy-arrived.jpg'), 'image', NULL, 28, 12, 1, 0, 1, 1, NOW(), DATE_SUB(NOW(), INTERVAL 1 HOUR)),
+    (2, 2, '小眼神', 'dog', '狗狗生活,可爱,温柔', '它看我的小眼神太有爱了，像在说别担心，有我。', '/images/demo/notes/white-dog.jpg', JSON_ARRAY('/images/demo/notes/white-dog.jpg'), 'image', NULL, 126, 55, 1, 0, 1, 0, NOW(), DATE_SUB(NOW(), INTERVAL 2 HOUR)),
+    (3, 1, '今天仓鼠到了', 'other', '日常,异宠日常,仓鼠', '仓鼠刚到家，目前很活泼，先让它安静熟悉环境。', '/images/demo/notes/hamster.jpg', JSON_ARRAY('/images/demo/notes/hamster.jpg'), 'image', NULL, 88, 31, 1, 0, 1, 0, NOW(), DATE_SUB(NOW(), INTERVAL 3 HOUR)),
+    (4, 3, '狗狗剪指甲正确方式', 'knowledge', '科普知识,洗护,指甲,训练', '剪指甲前先安抚情绪，一点点修剪，避免剪到血线。准备止血粉，剪完及时给予奖励。', '/images/demo/notes/nail-guide.jpg', JSON_ARRAY('/images/demo/notes/nail-guide.jpg'), 'image', NULL, 96, 57, 1, 0, 1, 0, NOW(), DATE_SUB(NOW(), INTERVAL 4 HOUR)),
+    (5, 4, '猫狗耳朵清洁要点', 'knowledge', '科普知识,耳朵,洗护,健康', '频繁挠耳、异味和分泌物增多都可能是耳道问题信号。不要用棉签深入耳道。', '/images/demo/notes/ear-care.jpg', JSON_ARRAY('/images/demo/notes/ear-care.jpg'), 'image', NULL, 102, 58, 1, 0, 1, 0, NOW(), DATE_SUB(NOW(), INTERVAL 5 HOUR)),
+    (6, 3, '为什么要定期驱虫', 'knowledge', '科普知识,驱虫,健康,日常', '体内外寄生虫会影响肠胃和皮肤健康。驱虫周期应结合宠物年龄、体重和兽医建议确定。', '/images/demo/notes/deworm-guide.jpg', JSON_ARRAY('/images/demo/notes/deworm-guide.jpg'), 'image', NULL, 118, 72, 1, 0, 1, 0, NOW(), DATE_SUB(NOW(), INTERVAL 6 HOUR)),
+    (7, 1, '快乐的小狗', 'dog', '日常,博美,散步', '今天在草地上玩得很开心，回家后很快就睡着了。', '/images/demo/notes/pomeranian.jpg', JSON_ARRAY('/images/demo/notes/pomeranian.jpg'), 'image', NULL, 143, 46, 1, 0, 0, 0, NOW(), DATE_SUB(NOW(), INTERVAL 7 HOUR)),
+    (8, 4, '陪我发呆', 'cat', '猫咪日常,温暖,治愈', '安静陪伴也是猫咪表达信任的一种方式。', '/images/demo/notes/cat-companion.jpg', JSON_ARRAY('/images/demo/notes/cat-companion.jpg'), 'image', NULL, 132, 61, 1, 0, 0, 0, NOW(), DATE_SUB(NOW(), INTERVAL 8 HOUR));
+
+INSERT INTO `cms_note_product_relation` (`note_id`, `product_id`)
+VALUES (1, 5);
+
+-- 演示商城横幅和养宠科普卡片
 INSERT INTO `cms_banner` (`title`, `position`, `slot`, `image_url`, `keyword`, `link_url`, `link_type`, `sort`, `status`)
 VALUES
-    ('新手养狗指南', 'SHOP_TOP', 'card', '/petmeetImage/Main-Commodity-image/10025.jpg', '幼犬', '/', 'internal', 1, 1),
-    ('猫咪绝育必读', 'SHOP_TOP', 'card', '/petmeetImage/Main-Commodity-image/10088.jpg', '绝育', '/', 'internal', 2, 1),
-    ('科学换粮指南', 'SHOP_TOP', 'card', '/petmeetImage/Main-Commodity-image/10069.jpg', '换粮', '/', 'internal', 3, 1),
-    ('猫狗驱虫全攻略', 'SHOP_TOP', 'card', '/petmeetImage/Main-Commodity-image/10032.jpg', '驱虫', '/', 'internal', 4, 1);
+    ('新年爱宠焕新', 'SHOP_HERO', 'hero', '/images/demo/banners/new-year-dog.jpg', '精选服饰和玩具', '/mall/list?categoryIds=6', 'internal', 1, 1),
+    ('猫咪春日穿搭', 'SHOP_HERO', 'hero', '/images/demo/banners/yellow-cat.jpg', '舒适服饰上新', '/mall/list?categoryIds=6', 'internal', 2, 1),
+    ('科学换粮法', 'SHOP_TOP', 'card', '/images/demo/science/food-transition.jpg', '换粮', '/community?keyword=换粮', 'internal', 1, 1),
+    ('应激反应识别', 'SHOP_TOP', 'card', '/images/demo/science/stress-response.jpg', '应激', '/community?keyword=应激', 'internal', 2, 1),
+    ('换季掉毛与毛球症', 'SHOP_TOP', 'card', '/images/demo/science/shedding.jpg', '掉毛', '/community?keyword=掉毛', 'internal', 3, 1),
+    ('狗狗洗澡的频率与雷区', 'SHOP_TOP', 'card', '/images/demo/science/dog-bathing.jpg', '洗护', '/community?keyword=洗护', 'internal', 4, 1);
 
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ==========================================
--- 建表完成
+-- 建表及演示数据初始化完成
 -- 表清单：
 --   1. sys_user                   用户表
 --   2. sys_follow                 关注关系表

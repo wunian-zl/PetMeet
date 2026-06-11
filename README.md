@@ -80,6 +80,8 @@ PetMeet
 ├─PetMeet-frontend
 │  ├─PetMeet-user                 用户端
 │  └─PetMeet-admin                管理端
+├─uploads
+│  └─demo                         可随仓库分发的演示图片
 └─scripts                         联调、回归和辅助脚本
 ```
 
@@ -108,7 +110,11 @@ cd PetMeet
 mysql -u root -p < PetMeet-backend/sql/ddl.sql
 ```
 
-`ddl.sql`是新环境的完整初始化入口，会创建`petmeet`数据库、16张业务表和少量广告示例数据，不需要再逐个执行`migration_*.sql`。
+`ddl.sql`是新环境的完整初始化入口，会创建`petmeet`数据库、16张业务表，并写入演示用户、笔记、商品、分类和商城广告数据，不需要再逐个执行`migration_*.sql`。
+
+演示数据引用的图片位于`uploads/demo`，这些文件已纳入Git版本控制。后端启动后会通过`http://localhost:8080/images/demo/...`提供访问，因此其他人克隆仓库并按上述步骤初始化数据库后，可以直接看到笔记图片、商品图片和商城横幅。
+
+用户后续上传的其他文件仍保存在`uploads`中并被`.gitignore`忽略，避免把运行时数据提交到仓库。
 
 > `ddl.sql`会删除同名业务表后重新创建，只适合全新环境。已有数据库升级时应按需执行`PetMeet-backend/sql`目录中的迁移脚本，避免丢失数据。
 
