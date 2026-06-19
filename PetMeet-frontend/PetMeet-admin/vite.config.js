@@ -4,9 +4,11 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const base = process.env.VITE_APP_BASE || '/admin/'
 
 // Vite 配置说明：https://vitejs.dev/config/
 export default defineConfig({
+    base,
     plugins: [vue()],
     resolve: {
         alias: {

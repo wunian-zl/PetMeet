@@ -10,7 +10,7 @@
   >
     <div class="login-container">
       <div class="poster-section">
-        <div class="poster-content-wrapper">
+        <div class="poster-content-wrapper" :style="posterStyle">
           <div class="poster-overlay"></div>
           <div class="poster-text">
             <div class="logo">PetMeet</div>
@@ -70,9 +70,13 @@ import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Close, User, Lock } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
+import loginPosterUrl from '@/assets/login-poster.jpg'
 
 const userStore = useUserStore()
 const loading = ref(false)
+const posterStyle = {
+  backgroundImage: `url(${loginPosterUrl})`
+}
 
 const loginForm = ref({
   username: '',
@@ -161,7 +165,7 @@ const handleLogin = async () => {
   height: 100%;
   border-radius: 30px;
   overflow: hidden;
-  background-image: url('/petmeetImage/login-register-image/login.jpg');
+  background-color: #d1d5db;
   background-size: cover;
   background-position: center;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);

@@ -10,8 +10,8 @@ spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/petmeet?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
+    url: ${PETMEET_DB_URL:jdbc:mysql://localhost:3306/petmeet?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${PETMEET_DB_USER:root}
     password: ${PETMEET_DB_PASSWORD}
     druid:
       initial-size: 5
@@ -26,9 +26,9 @@ spring:
   # ================== Redis 配置 ==================
   data:
     redis:
-      host: localhost
-      port: 6379
-      password:  # 无密码留空
+      host: ${PETMEET_REDIS_HOST:localhost}
+      port: ${PETMEET_REDIS_PORT:6379}
+      password: ${PETMEET_REDIS_PASSWORD:}  # 无密码留空
       database: 0
       timeout: 10000ms
       lettuce:
@@ -118,9 +118,9 @@ logging:
 petmeet:
   upload:
     # 默认以整个 PetMeet 工作区根目录为基准，上传目录固定为 ./uploads
-    path: ./uploads
+    path: ${PETMEET_UPLOAD_PATH:./uploads}
     # 文件访问基础URL
-    base-url: http://localhost:8080/images
+    base-url: ${PETMEET_UPLOAD_BASE_URL:http://localhost:8080/images}
 app:
   admin:
     username: admin

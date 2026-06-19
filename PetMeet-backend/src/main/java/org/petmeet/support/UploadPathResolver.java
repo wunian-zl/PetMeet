@@ -27,6 +27,14 @@ public final class UploadPathResolver {
     }
 
     public static File resolveUploadsRootDir() {
+        String configuredPath = System.getProperty("petmeet.upload.path");
+        if (isBlank(configuredPath)) {
+            configuredPath = System.getenv("PETMEET_UPLOAD_PATH");
+        }
+        if (!isBlank(configuredPath)) {
+            File configuredDir = new File(configuredPath.trim());
+            return configuredDir.isAbsolute() ? configuredDir : new File(resolveProjectRootDir(), configuredPath.trim());
+        }
         return new File(resolveProjectRootDir(), UPLOADS_DIR_NAME);
     }
 
@@ -46,5 +54,9 @@ public final class UploadPathResolver {
         return dir.getName().endsWith(BACKEND_DIR_SUFFIX)
                 && new File(dir, "pom.xml").isFile()
                 && new File(dir, "src").isDirectory();
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }

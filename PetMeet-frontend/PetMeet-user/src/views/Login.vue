@@ -2,7 +2,7 @@
   <div class="login-container">
     <div class="login-card">
     <!-- 左侧：图片与品牌区 -->
-      <div class="login-image">
+      <div class="login-image" :style="loginImageStyle">
         <div class="image-content">
           <div class="logo-text">PetMeet</div>
           <p class="slogan">发现身边的美好宠物生活</p>
@@ -120,10 +120,14 @@ import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import request from '@/utils/request'
 import { ElMessage } from 'element-plus'
+import loginPosterUrl from '@/assets/login-poster.jpg'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
+const loginImageStyle = {
+  backgroundImage: `url(${loginPosterUrl})`
+}
 
 const activeTab = ref('login')
 const loading = ref(false)
@@ -256,7 +260,7 @@ const handleRegister = async () => {
 
 .login-image {
   flex: 0 0 60%; /* Take up 60% of the screen */
-  background-image: url('https://i.pinimg.com/736x/8d/f3/e6/8df3e67026df33230638575003504a5d.jpg'); /* Cute cat illustration style */
+  background-color: #d1d5db;
   background-size: cover;
   background-position: center;
   position: relative;

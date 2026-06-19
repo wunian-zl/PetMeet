@@ -3,7 +3,14 @@
  */
 
 // 后端基础地址
-const BASE_URL = 'http://localhost:8080'
+const normalizeBaseUrl = (value) => {
+    if (typeof value !== 'string') {
+        return ''
+    }
+    return value.trim().replace(/\/$/, '')
+}
+
+const BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_ORIGIN)
 
 /**
  * 处理图片 URL，确保路径正确
