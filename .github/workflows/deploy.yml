@@ -1,0 +1,209 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type DEPLOY to deploy to the production server.
+        required: true
+        type: string
+
+concurrency:
+  group: petmeet-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to production
+    if: ${{ github.event.inputs.confirm == 'DEPLOY' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            PetMeet-frontend/PetMeet-user/package-lock.json
+            PetMeet-frontend/PetMeet-admin/package-lock.json
+
+      - name: Build backend
+        working-directory: PetMeet-backend
+        run: |
+          chmod +x mvnw
+          ./mvnw -B clean package -DskipTests
+
+      - name: Build user frontend
+        working-directory: PetMeet-frontend/PetMeet-user
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build admin frontend
+        working-directory: PetMeet-frontend/PetMeet-admin
+        env:
+          VITE_APP_BASE: /admin/
+        run: |
+          npm ci
+          npm run build
+
+      - name: Create deploy bundle
+        run: |
+          set -euo pipefail
+
+          output_dir="outputs/petmeet-deploy"
+          zip_path="outputs/petmeet-deploy.zip"
+
+          rm -rf outputs
+          mkdir -p "$output_dir/frontend" "$output_dir/uploads"
+
+          jar_path="$(find PetMeet-backend/target -maxdepth 1 -type f -name '*.jar' ! -name '*sources*' ! -name '*javadoc*' | sort | head -n 1)"
+          if [ -z "$jar_path" ]; then
+            echo "Backend jar not found under PetMeet-backend/target."
+            exit 1
+          fi
+
+          cp "$jar_path" "$output_dir/PetMeet-backend.jar"
+          cp -R PetMeet-backend/sql "$output_dir/sql"
+          cp -R deploy "$output_dir/deploy"
+          cp -R uploads/demo "$output_dir/uploads/demo"
+          cp -R PetMeet-frontend/PetMeet-user/dist "$output_dir/frontend/user"
+          cp -R PetMeet-frontend/PetMeet-admin/dist "$output_dir/frontend/admin"
+
+          cd "$output_dir"
+          zip -r "../petmeet-deploy.zip" .
+          cd -
+
+          test -f "$zip_path"
+
+      - name: Upload deploy bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: petmeet-deploy-zip
+          path: outputs/petmeet-deploy.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Prepare SSH key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.PETMEET_SERVER_SSH_KEY }}" > ~/.ssh/petmeet_deploy
+          chmod 600 ~/.ssh/petmeet_deploy
+          ssh-keyscan -H "${{ secrets.PETMEET_SERVER_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload bundle to server
+        run: |
+          set -euo pipefail
+          scp -i ~/.ssh/petmeet_deploy \
+            -o BatchMode=yes \
+            outputs/petmeet-deploy.zip \
+            "${{ secrets.PETMEET_SERVER_USER }}@${{ secrets.PETMEET_SERVER_HOST }}:/tmp/petmeet-deploy-${GITHUB_RUN_ID}.zip"
+
+      - name: Deploy on server
+        run: |
+          set -euo pipefail
+          remote_bundle="/tmp/petmeet-deploy-${GITHUB_RUN_ID}.zip"
+
+          ssh -i ~/.ssh/petmeet_deploy \
+            -o BatchMode=yes \
+            "${{ secrets.PETMEET_SERVER_USER }}@${{ secrets.PETMEET_SERVER_HOST }}" \
+            "PETMEET_BUNDLE='$remote_bundle' PETMEET_RUN_ID='$GITHUB_RUN_ID' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          bundle="$PETMEET_BUNDLE"
+          run_id="$PETMEET_RUN_ID"
+          release_dir="/tmp/petmeet-deploy-${run_id}"
+          backup_dir="/opt/petmeet/backups/$(date +%Y%m%d%H%M%S)-${run_id}"
+
+          rollback() {
+            set +e
+            trap - ERR
+            echo "Deployment failed. Rolling back from ${backup_dir}."
+
+            if [ -f "${backup_dir}/PetMeet-backend.jar" ]; then
+              sudo cp "${backup_dir}/PetMeet-backend.jar" /opt/petmeet/PetMeet-backend.jar
+            fi
+            if [ -d "${backup_dir}/frontend/user" ]; then
+              sudo rsync -a --delete "${backup_dir}/frontend/user/" /var/www/petmeet/user/
+            fi
+            if [ -d "${backup_dir}/frontend/admin" ]; then
+              sudo rsync -a --delete "${backup_dir}/frontend/admin/" /var/www/petmeet/admin/
+            fi
+            if [ -d "${backup_dir}/sql" ]; then
+              sudo rm -rf /opt/petmeet/sql
+              sudo cp -R "${backup_dir}/sql" /opt/petmeet/sql
+            fi
+            if [ -d "${backup_dir}/uploads/demo" ]; then
+              sudo rsync -a --delete "${backup_dir}/uploads/demo/" /opt/petmeet/uploads/demo/
+            fi
+
+            sudo chown -R petmeet:petmeet /opt/petmeet
+            sudo systemctl restart petmeet-backend
+            exit 1
+          }
+
+          test -f "$bundle"
+          sudo -n true
+
+          rm -rf "$release_dir"
+          mkdir -p "$release_dir"
+          unzip -q "$bundle" -d "$release_dir"
+
+          test -f "$release_dir/PetMeet-backend.jar"
+          test -d "$release_dir/frontend/user"
+          test -d "$release_dir/frontend/admin"
+          test -d "$release_dir/deploy"
+          test -d "$release_dir/sql"
+          test -d "$release_dir/uploads/demo"
+
+          sudo mkdir -p "$backup_dir/frontend" "$backup_dir/uploads"
+          if [ -f /opt/petmeet/PetMeet-backend.jar ]; then
+            sudo cp /opt/petmeet/PetMeet-backend.jar "$backup_dir/PetMeet-backend.jar"
+          fi
+          if [ -d /var/www/petmeet/user ]; then
+            sudo rsync -a /var/www/petmeet/user/ "$backup_dir/frontend/user/"
+          fi
+          if [ -d /var/www/petmeet/admin ]; then
+            sudo rsync -a /var/www/petmeet/admin/ "$backup_dir/frontend/admin/"
+          fi
+          if [ -d /opt/petmeet/sql ]; then
+            sudo cp -R /opt/petmeet/sql "$backup_dir/sql"
+          fi
+          if [ -d /opt/petmeet/uploads/demo ]; then
+            sudo rsync -a /opt/petmeet/uploads/demo/ "$backup_dir/uploads/demo/"
+          fi
+
+          trap rollback ERR
+
+          sudo cp "$release_dir/PetMeet-backend.jar" /opt/petmeet/PetMeet-backend.jar
+          sudo rm -rf /opt/petmeet/sql
+          sudo cp -R "$release_dir/sql" /opt/petmeet/sql
+
+          sudo mkdir -p /opt/petmeet/uploads/demo /var/www/petmeet/user /var/www/petmeet/admin
+          sudo rsync -a --delete "$release_dir/uploads/demo/" /opt/petmeet/uploads/demo/
+          sudo rsync -a --delete "$release_dir/frontend/user/" /var/www/petmeet/user/
+          sudo rsync -a --delete "$release_dir/frontend/admin/" /var/www/petmeet/admin/
+          sudo chown -R petmeet:petmeet /opt/petmeet
+
+          sudo systemctl restart petmeet-backend
+          sleep 8
+          sudo systemctl is-active --quiet petmeet-backend
+          curl -fsS --max-time 10 http://127.0.0.1:8080/doc.html >/dev/null \
+            || curl -fsS --max-time 10 http://127.0.0.1:8080/v3/api-docs >/dev/null
+          curl -fsS --max-time 10 http://127.0.0.1/ >/dev/null
+
+          trap - ERR
+          echo "Deployment succeeded. Backup kept at ${backup_dir}."
+          REMOTE
