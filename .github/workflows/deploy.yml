@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: Type DEPLOY to deploy to the production server.
+        description: Type deploy to deploy to the production server.
         required: true
         type: string
 
@@ -15,7 +15,7 @@ concurrency:
 jobs:
   deploy:
     name: Deploy to production
-    if: ${{ github.event.inputs.confirm == 'DEPLOY' }}
+    if: ${{ github.event.inputs.confirm == 'deploy' }}
     runs-on: ubuntu-latest
 
     steps:
