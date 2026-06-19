@@ -1,0 +1,86 @@
+name: Package Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package:
+    name: Build deploy package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            PetMeet-frontend/PetMeet-user/package-lock.json
+            PetMeet-frontend/PetMeet-admin/package-lock.json
+
+      - name: Build backend
+        working-directory: PetMeet-backend
+        run: |
+          chmod +x mvnw
+          ./mvnw -B clean package -DskipTests
+
+      - name: Build user frontend
+        working-directory: PetMeet-frontend/PetMeet-user
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build admin frontend
+        working-directory: PetMeet-frontend/PetMeet-admin
+        env:
+          VITE_APP_BASE: /admin/
+        run: |
+          npm ci
+          npm run build
+
+      - name: Create deploy bundle
+        run: |
+          set -euo pipefail
+
+          output_dir="outputs/petmeet-deploy"
+          zip_path="outputs/petmeet-deploy.zip"
+
+          rm -rf outputs
+          mkdir -p "$output_dir/frontend" "$output_dir/uploads"
+
+          jar_path="$(find PetMeet-backend/target -maxdepth 1 -type f -name '*.jar' ! -name '*sources*' ! -name '*javadoc*' | sort | head -n 1)"
+          if [ -z "$jar_path" ]; then
+            echo "Backend jar not found under PetMeet-backend/target."
+            exit 1
+          fi
+
+          cp "$jar_path" "$output_dir/PetMeet-backend.jar"
+          cp -R PetMeet-backend/sql "$output_dir/sql"
+          cp -R deploy "$output_dir/deploy"
+          cp -R uploads/demo "$output_dir/uploads/demo"
+          cp -R PetMeet-frontend/PetMeet-user/dist "$output_dir/frontend/user"
+          cp -R PetMeet-frontend/PetMeet-admin/dist "$output_dir/frontend/admin"
+
+          cd "$output_dir"
+          zip -r "../petmeet-deploy.zip" .
+          cd -
+
+          test -f "$zip_path"
+
+      - name: Upload deploy bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: petmeet-deploy-zip
+          path: outputs/petmeet-deploy.zip
+          if-no-files-found: error
+          retention-days: 7
