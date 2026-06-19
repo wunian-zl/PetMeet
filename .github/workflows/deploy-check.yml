@@ -1,0 +1,31 @@
+name: Deploy Check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ssh-check:
+    name: Check server SSH access
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Prepare SSH key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.PETMEET_SERVER_SSH_KEY }}" > ~/.ssh/petmeet_deploy
+          chmod 600 ~/.ssh/petmeet_deploy
+          ssh-keyscan -H "${{ secrets.PETMEET_SERVER_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Check server status
+        run: |
+          ssh -i ~/.ssh/petmeet_deploy \
+            -o BatchMode=yes \
+            "${{ secrets.PETMEET_SERVER_USER }}@${{ secrets.PETMEET_SERVER_HOST }}" \
+            'set -e
+             echo "user=$(whoami)"
+             echo "host=$(hostname)"
+             echo "backend=$(systemctl is-active petmeet-backend)"
+             echo "nginx=$(systemctl is-active nginx)"
+             echo "mysql=$(systemctl is-active mysql)"
+             echo "redis=$(systemctl is-active redis-server)"'
