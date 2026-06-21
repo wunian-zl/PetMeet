@@ -1,9 +1,26 @@
-<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title">
-  <title id="title">PetMeet</title>
-  <rect x="8" y="8" width="48" height="48" rx="16" fill="#FFF4F6"/>
-  <path d="M20 31.5C20 23.8 26.1 18.5 33.7 18.5C41.6 18.5 47.5 24.1 47.5 31.3C47.5 38.5 41.7 44 34.1 44H30.4L23.8 47.8L25.4 41.9C22.1 39.5 20 35.8 20 31.5Z" stroke="#FF6B81" stroke-width="3.2" stroke-linejoin="round"/>
-  <circle cx="28.2" cy="30.1" r="2.2" fill="#FF6B81"/>
-  <circle cx="35.8" cy="30.1" r="2.2" fill="#FF6B81"/>
-  <circle cx="32" cy="26.7" r="2" fill="#FF6B81"/>
-  <path d="M27.8 36.3C27.8 33.9 29.6 32.1 32 32.1C34.4 32.1 36.2 33.9 36.2 36.3C36.2 38 34.7 38.7 32 38.7C29.3 38.7 27.8 38 27.8 36.3Z" fill="#FF6B81"/>
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="petmeetUserMarkTitle">
+  <title id="petmeetUserMarkTitle">PetMeet</title>
+  <defs>
+    <linearGradient id="pmUserMarkBg" x1="10" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF9AAE"/>
+      <stop offset="0.54" stop-color="#FF6B81"/>
+      <stop offset="1" stop-color="#F94F72"/>
+    </linearGradient>
+    <linearGradient id="pmUserMarkPad" x1="27" y1="30" x2="38" y2="41" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#62D0C5"/>
+      <stop offset="1" stop-color="#2BB8AD"/>
+    </linearGradient>
+    <filter id="pmUserMarkShadow" x="10" y="8" width="46" height="46" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#D94361" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+  <rect width="64" height="64" rx="20" fill="url(#pmUserMarkBg)"/>
+  <path d="M15.8 28.8C15.8 18.4 23.6 11.2 33.9 11.2C44 11.2 51 18.1 51 27.7C51 37.8 43.2 45 32.3 45C29.6 45 26.9 44.4 24.6 43.4L16.3 49.2L19 40.3C16.9 37.2 15.8 33.2 15.8 28.8Z" fill="white" filter="url(#pmUserMarkShadow)"/>
+  <path d="M21.8 28.5C21.8 21.2 27.2 16.2 34.2 16.2C41 16.2 46.3 21 46.3 27.9C46.3 35.2 40.5 40.5 32.5 40.5C30.3 40.5 28.3 40.1 26.4 39.3L22.8 41.7L24 37.1C22.6 34.8 21.8 31.7 21.8 28.5Z" fill="#FFF8FA"/>
+  <ellipse cx="27.2" cy="28.5" rx="2.8" ry="3.6" fill="#62D0C5" transform="rotate(-24 27.2 28.5)"/>
+  <ellipse cx="31.2" cy="24.9" rx="2.8" ry="3.7" fill="#62D0C5" transform="rotate(-8 31.2 24.9)"/>
+  <ellipse cx="36.2" cy="25.1" rx="2.8" ry="3.7" fill="#62D0C5" transform="rotate(9 36.2 25.1)"/>
+  <ellipse cx="40.2" cy="28.8" rx="2.8" ry="3.6" fill="#62D0C5" transform="rotate(24 40.2 28.8)"/>
+  <path d="M26.8 36.6C26.8 34.4 27.9 32.7 29.9 31.8C30.5 30.5 31.5 29.7 32.8 29.7C34.2 29.7 35.2 30.5 35.9 31.8C37.8 32.7 39 34.5 39 36.7C39 39.8 36.6 41.8 32.9 41.8C29.2 41.8 26.8 39.7 26.8 36.6Z" fill="url(#pmUserMarkPad)"/>
+  <path d="M30.3 35.8C30.3 34.4 31.3 33.4 32.8 33.4C34.4 33.4 35.5 34.4 35.5 35.8C35.5 37.1 34.4 37.7 32.9 37.7C31.4 37.7 30.3 37.1 30.3 35.8Z" fill="#45B9AF" opacity="0.5"/>
 </svg>
