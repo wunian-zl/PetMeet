@@ -13,11 +13,11 @@ import java.util.List;
 @Schema(description = "Note publish request")
 public class NotePublishDTO {
 
-    @NotBlank(message = "title is required")
+    @NotBlank(message = "标题不能为空")
     @Schema(description = "Note title", example = "My pet note")
     private String title;
 
-    @NotBlank(message = "content is required")
+    @NotBlank(message = "内容不能为空")
     @Schema(description = "Note content")
     private String content;
 

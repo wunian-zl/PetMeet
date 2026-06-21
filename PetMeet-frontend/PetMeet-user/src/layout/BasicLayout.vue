@@ -5,6 +5,7 @@
       <div class="logo-area">
       <!-- 用粉色爪印图标当站点标识 -->
         <div class="logo-icon">
+          <img src="/brand/petmeet-user-mark.svg" alt="PetMeet" />
            🐾
         </div>
       </div>
@@ -144,11 +145,17 @@ onMounted(async () => {
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 26px;
+        font-size: 0;
         color: #FF6B81; 
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 240, 243, 0.5));
-        box-shadow: 0 4px 12px rgba(255, 107, 129, 0.15);
+        background: transparent;
+        box-shadow: none;
         cursor: default; /* No pointer cursor implies no action */
+
+        img {
+          width: 52px;
+          height: 52px;
+          display: block;
+        }
         /* 这里去掉过渡效果 */
         
         /* 这里去掉悬停效果 */

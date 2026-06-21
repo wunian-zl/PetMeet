@@ -20,9 +20,13 @@ public class AdminOrderVO {
     private Integer status;
     private String statusDesc;
     private String payType;
+    private String paySn;
+    private String tradeNo;
+    private BigDecimal refundAmount;
     private String address;
     private String receiver;
     private String phone;
+    private String remark;
     private String shipCompany;
     private String trackingNo;
     private List<OrderItemVO> items;
@@ -43,10 +47,16 @@ public class AdminOrderVO {
     @Data
     public static class RefundVO {
         private Long afterSaleId;
+        private String refundSn;
         private String reason;
         private String description;
         private List<String> evidenceImages;
         private Integer status;
         private String statusDesc;
+        private BigDecimal refundAmount;
+        private Integer refundStatus;
+        private String refundStatusDesc;
+        private String refundTradeNo;
+        private LocalDateTime refundTime;
     }
 }

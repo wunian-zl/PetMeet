@@ -158,12 +158,20 @@ DROP TABLE IF EXISTS `cms_comment`;
 CREATE TABLE `cms_comment` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '评论 ID，主键',
     `note_id` BIGINT NOT NULL COMMENT '笔记 ID，关联 cms_note.id',
+    `parent_id` BIGINT DEFAULT NULL COMMENT '一级评论 ID，NULL 表示一级评论',
+    `reply_to_id` BIGINT DEFAULT NULL COMMENT '被回复的评论 ID',
     `user_id` BIGINT NOT NULL COMMENT '评论用户 ID，关联 sys_user.id',
     `content` VARCHAR(500) NOT NULL COMMENT '评论内容',
+    `like_count` INT NOT NULL DEFAULT 0 COMMENT '评论点赞数',
+    `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0正常，1已删除',
     `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `delete_time` DATETIME DEFAULT NULL COMMENT '删除时间',
     PRIMARY KEY (`id`),
     KEY `idx_note_id` (`note_id`),
-    KEY `idx_user_id` (`user_id`)
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_parent_id` (`parent_id`),
+    KEY `idx_reply_to_id` (`reply_to_id`),
+    KEY `idx_note_parent_status_time` (`note_id`, `parent_id`, `status`, `create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='评论表';
 
 -- -------------------------------------------
@@ -222,7 +230,11 @@ CREATE TABLE `oms_order` (
     `order_sn` VARCHAR(64) NOT NULL COMMENT '订单编号，需保证唯一',
     `user_id` BIGINT NOT NULL COMMENT '用户 ID，关联 sys_user.id',
     `total_amount` DECIMAL(10,2) NOT NULL COMMENT '订单总金额，单位为元',
-    `status` TINYINT NOT NULL DEFAULT 0 COMMENT '订单状态：0待付款，1已付款，2已发货，3已完成，4已关闭',
+    `refund_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT '已退款金额',
+    `status` TINYINT NOT NULL DEFAULT 0 COMMENT '订单状态：0待付款，1已付款，2已发货，3已完成，4已关闭，5退款中',
+    `pay_type` TINYINT DEFAULT NULL COMMENT '支付方式：1支付宝，2微信Mock',
+    `pay_sn` VARCHAR(64) DEFAULT NULL COMMENT '系统支付流水号',
+    `trade_no` VARCHAR(128) DEFAULT NULL COMMENT '第三方交易流水号',
     `review_status` TINYINT NOT NULL DEFAULT 0 COMMENT '评价状态：0待评价，1已评价',
     `review_score` TINYINT DEFAULT NULL COMMENT '评价星级（1-5）',
     `review_content` VARCHAR(500) DEFAULT NULL COMMENT '评价内容',
@@ -235,6 +247,7 @@ CREATE TABLE `oms_order` (
     `receiver` VARCHAR(50) DEFAULT NULL COMMENT '收货人姓名',
     `phone` VARCHAR(20) DEFAULT NULL COMMENT '收货人电话',
     `address` VARCHAR(500) DEFAULT NULL COMMENT '收货地址',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '订单备注',
     `user_deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '用户端逻辑删除标记：0未删除，1已删除',
     `admin_deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '管理端逻辑删除标记：0未删除，1已删除',
     `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '下单时间',
@@ -242,6 +255,7 @@ CREATE TABLE `oms_order` (
     UNIQUE KEY `uk_order_sn` (`order_sn`),
     KEY `idx_user_id` (`user_id`),
     KEY `idx_status` (`status`),
+    KEY `idx_pay_sn` (`pay_sn`),
     KEY `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单表';
 
@@ -263,7 +277,68 @@ CREATE TABLE `oms_order_item` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单明细表';
 
 -- -------------------------------------------
--- 12. 订单售后申请表 oms_after_sale
+-- 12. 支付流水表 oms_pay_log
+-- -------------------------------------------
+DROP TABLE IF EXISTS `oms_pay_log`;
+CREATE TABLE `oms_pay_log` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '支付流水 ID',
+    `pay_sn` VARCHAR(64) NOT NULL COMMENT '系统支付流水号',
+    `order_id` BIGINT NOT NULL COMMENT '订单 ID',
+    `order_sn` VARCHAR(64) NOT NULL COMMENT '订单编号',
+    `user_id` BIGINT NOT NULL COMMENT '用户 ID',
+    `pay_type` TINYINT NOT NULL COMMENT '支付方式：1支付宝，2微信Mock',
+    `pay_mode` TINYINT NOT NULL DEFAULT 1 COMMENT '支付模式：1扫码',
+    `pay_amount` DECIMAL(10,2) NOT NULL COMMENT '支付金额',
+    `pay_status` TINYINT NOT NULL DEFAULT 0 COMMENT '支付状态：0待支付，1成功，2失败，3关闭',
+    `trade_no` VARCHAR(128) DEFAULT NULL COMMENT '第三方交易流水号',
+    `qr_code_url` VARCHAR(500) DEFAULT NULL COMMENT '二维码内容',
+    `pay_page_url` TEXT DEFAULT NULL COMMENT '支付页面内容',
+    `expire_time` DATETIME NOT NULL COMMENT '支付过期时间',
+    `pay_time` DATETIME DEFAULT NULL COMMENT '支付完成时间',
+    `callback_time` DATETIME DEFAULT NULL COMMENT '回调时间',
+    `callback_content` TEXT DEFAULT NULL COMMENT '回调原始报文',
+    `error_msg` VARCHAR(500) DEFAULT NULL COMMENT '失败原因',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_pay_sn` (`pay_sn`),
+    KEY `idx_order_id` (`order_id`),
+    KEY `idx_order_sn` (`order_sn`),
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_trade_no` (`trade_no`),
+    KEY `idx_pay_status` (`pay_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支付流水表';
+
+-- -------------------------------------------
+-- 13. 退款流水表 oms_refund_log
+-- -------------------------------------------
+DROP TABLE IF EXISTS `oms_refund_log`;
+CREATE TABLE `oms_refund_log` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '退款流水 ID',
+    `refund_sn` VARCHAR(64) NOT NULL COMMENT '退款流水号',
+    `order_id` BIGINT NOT NULL COMMENT '订单 ID',
+    `order_sn` VARCHAR(64) NOT NULL COMMENT '订单编号',
+    `pay_log_id` BIGINT DEFAULT NULL COMMENT '支付流水 ID',
+    `after_sale_id` BIGINT DEFAULT NULL COMMENT '售后申请 ID',
+    `user_id` BIGINT NOT NULL COMMENT '用户 ID',
+    `pay_type` TINYINT DEFAULT NULL COMMENT '原支付方式：1支付宝，2微信Mock',
+    `refund_amount` DECIMAL(10,2) NOT NULL COMMENT '退款金额',
+    `refund_reason` VARCHAR(200) DEFAULT NULL COMMENT '退款原因',
+    `refund_status` TINYINT NOT NULL DEFAULT 0 COMMENT '退款状态：0退款中，1成功，2失败',
+    `trade_no` VARCHAR(128) DEFAULT NULL COMMENT '第三方退款交易号',
+    `refund_time` DATETIME DEFAULT NULL COMMENT '退款完成时间',
+    `error_msg` VARCHAR(500) DEFAULT NULL COMMENT '失败原因',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_refund_sn` (`refund_sn`),
+    KEY `idx_order_id` (`order_id`),
+    KEY `idx_after_sale_id` (`after_sale_id`),
+    KEY `idx_refund_status` (`refund_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='退款流水表';
+
+-- -------------------------------------------
+-- 14. 订单售后申请表 oms_after_sale
 -- -------------------------------------------
 DROP TABLE IF EXISTS `oms_after_sale`;
 CREATE TABLE `oms_after_sale` (
@@ -290,16 +365,19 @@ CREATE TABLE `oms_after_sale` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单售后申请表';
 
 -- -------------------------------------------
--- 13. 内容投诉表 cms_complaint
+-- 15. 内容投诉表 cms_complaint
 -- -------------------------------------------
 DROP TABLE IF EXISTS `cms_complaint`;
 CREATE TABLE `cms_complaint` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '投诉 ID',
     `note_id` BIGINT NOT NULL COMMENT '被投诉笔记 ID',
+    `target_type` VARCHAR(20) NOT NULL DEFAULT 'note' COMMENT '投诉对象类型：note笔记，comment评论',
+    `comment_id` BIGINT DEFAULT NULL COMMENT '被投诉评论 ID',
     `parent_id` BIGINT DEFAULT NULL COMMENT '上一级投诉 ID，用于再次投诉',
     `user_id` BIGINT NOT NULL COMMENT '投诉用户 ID',
     `reason` VARCHAR(50) NOT NULL COMMENT '投诉原因',
     `content` VARCHAR(500) DEFAULT NULL COMMENT '投诉详情',
+    `evidence_images` TEXT DEFAULT NULL COMMENT '投诉凭证图片列表（JSON 数组）',
     `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0待处理，1已处理，2已驳回',
     `handle_remark` VARCHAR(500) DEFAULT NULL COMMENT '管理员处理结果',
     `user_deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '用户端逻辑删除标记：0未删除，1已删除',
@@ -312,6 +390,7 @@ CREATE TABLE `cms_complaint` (
     `handler_id` BIGINT DEFAULT NULL COMMENT '处理管理员 ID',
     PRIMARY KEY (`id`),
     KEY `idx_note` (`note_id`),
+    KEY `idx_target` (`target_type`, `note_id`, `comment_id`),
     KEY `idx_user` (`user_id`),
     KEY `idx_parent` (`parent_id`),
     KEY `idx_status` (`status`),

@@ -18,7 +18,11 @@ public class OmsOrder implements Serializable {
     private String orderNo; // 别名, 用于前端兼容
     private Long userId;
     private BigDecimal totalAmount;
+    private BigDecimal refundAmount;
     private Integer status;
+    private Integer payType;
+    private String paySn;
+    private String tradeNo;
     private Integer reviewStatus;
     private Integer reviewScore;
     private String reviewContent;
@@ -35,6 +39,7 @@ public class OmsOrder implements Serializable {
     private String receiver;
     private String phone;
     private String address;
+    private String remark;
     private Integer userDeleted;
     private Integer adminDeleted;
 
@@ -50,4 +55,7 @@ public class OmsOrder implements Serializable {
 
     public static final int REVIEW_PENDING = 0;
     public static final int REVIEW_DONE = 1;
+
+    public static final int DELETE_VISIBLE = 0;
+    public static final int DELETE_DELETED = 1;
 }

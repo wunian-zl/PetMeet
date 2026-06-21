@@ -53,7 +53,7 @@ public class NotificationController {
     public Result<Void> markRead(@PathVariable Long id) {
         // 把指定通知标记为已读
         notificationService.markRead(id);
-        return Result.success("OK", null);
+        return Result.success("操作成功", null);
     }
 
     /**
@@ -64,7 +64,7 @@ public class NotificationController {
     public Result<Void> markAllRead() {
         // 把当前用户全部通知标记为已读
         notificationService.markAllRead();
-        return Result.success("OK", null);
+        return Result.success("操作成功", null);
     }
 
     /**
@@ -75,7 +75,7 @@ public class NotificationController {
     public Result<Void> delete(@PathVariable Long id) {
         // 删除指定通知
         notificationService.deleteMy(id);
-        return Result.success("OK", null);
+        return Result.success("操作成功", null);
     }
 
     /**
@@ -86,6 +86,6 @@ public class NotificationController {
     public Result<Void> batchDelete(@RequestBody List<Long> ids) {
         // 批量删除通知
         notificationService.deleteMyBatch(ids);
-        return Result.success("OK", null);
+        return Result.success("操作成功", null);
     }
 }

@@ -1,5 +1,7 @@
 package org.petmeet.service.impl;
 
+import org.petmeet.common.AppException;
+
 import cn.dev33.satoken.secure.BCrypt;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.bean.BeanUtil;
@@ -14,7 +16,6 @@ import org.petmeet.mapper.SysUserMapper;
 import org.petmeet.service.SysUserService;
 import org.petmeet.vo.LoginVO;
 import org.petmeet.vo.UserInfoVO;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -23,15 +24,6 @@ import java.time.LocalDateTime;
 @Service
 @RequiredArgsConstructor
 public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> implements SysUserService {
-
-    @Value("${app.admin.username:admin}")
-    private String adminUsername;
-
-    @Value("${app.admin.nickname:管理员}")
-    private String adminNickname;
-
-    @Value("${app.admin.auto-create:true}")
-    private Boolean adminAutoCreate;
 
     /**
      * 注册功能
@@ -43,7 +35,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysUser::getUsername, username);
         if (this.count(wrapper) > 0) {
-            throw new RuntimeException("用户名已存在");
+            throw AppException.badRequest("用户名已存在");
         }
 
         // 封装用户对象，并对密码进行加密后保存
@@ -52,8 +44,8 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         user.setPassword(BCrypt.hashpw(dto.getPassword()));
         user.setNickname(dto.getNickname() != null ? dto.getNickname() : username);
         user.setPhone(dto.getPhone());
-        user.setRole("user");
-        user.setStatus(1);
+        user.setRole(SysUser.ROLE_USER);
+        user.setStatus(SysUser.STATUS_ENABLED);
         user.setCreateTime(LocalDateTime.now());
         this.save(user);
 
@@ -73,7 +65,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     public LoginVO login(LoginDTO dto) {
         String loginUsername = dto.getUsername() == null ? "" : dto.getUsername().trim();
         if (loginUsername.isEmpty()) {
-            throw new RuntimeException("用户名不能为空");
+            throw AppException.badRequest("用户名不能为空");
         }
         String loginPassword = dto.getPassword() == null ? "" : dto.getPassword();
 
@@ -91,10 +83,10 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
         // 校验密码和账号状态
         if (!BCrypt.checkpw(loginPassword, user.getPassword())) {
-            throw new RuntimeException("密码错误");
+            throw AppException.badRequest("密码错误");
         }
-        if (user.getStatus() != 1) {
-            throw new RuntimeException("账号已被禁用");
+        if (!Integer.valueOf(SysUser.STATUS_ENABLED).equals(user.getStatus())) {
+            throw AppException.badRequest("账号已被禁用");
         }
 
         // 创建登录态，并更新最后登录时间
@@ -128,7 +120,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     public UserInfoVO getUserInfoById(Long userId) {
         SysUser user = this.getById(userId);
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw AppException.notFound("用户不存在");
         }
         UserInfoVO vo = new UserInfoVO();
         BeanUtil.copyProperties(user, vo);
@@ -157,7 +149,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     public LoginVO adminLogin(LoginDTO dto) {
         String loginUsername = dto.getUsername() == null ? "" : dto.getUsername().trim();
         if (loginUsername.isEmpty()) {
-            throw new RuntimeException("用户名不能为空");
+            throw AppException.badRequest("用户名不能为空");
         }
 
         // 根据用户名查询管理员用户
@@ -165,35 +157,19 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         wrapper.eq(SysUser::getUsername, loginUsername);
         SysUser user = this.getOne(wrapper);
 
-        // 管理员账号不存在时，按配置决定是否自动创建
         if (user == null) {
-            String adminUsernameValue = adminUsername == null ? "" : adminUsername.trim();
-            boolean allowAutoCreate = Boolean.TRUE.equals(adminAutoCreate)
-                    && (adminUsernameValue.isEmpty() || adminUsernameValue.equalsIgnoreCase(loginUsername));
-            if (allowAutoCreate) {
-                SysUser admin = new SysUser();
-                admin.setUsername(loginUsername);
-                admin.setPassword(BCrypt.hashpw(dto.getPassword()));
-                admin.setNickname(adminNickname);
-                admin.setRole("admin");
-                admin.setStatus(1);
-                admin.setCreateTime(LocalDateTime.now());
-                this.save(admin);
-                user = admin;
-            } else {
-                throw new RuntimeException("用户不存在");
-            }
+            throw AppException.notFound("管理员账号不存在");
         }
 
         // 校验密码、状态和角色
         if (!BCrypt.checkpw(dto.getPassword(), user.getPassword())) {
-            throw new RuntimeException("密码错误");
+            throw AppException.badRequest("密码错误");
         }
-        if (user.getStatus() != 1) {
-            throw new RuntimeException("账号已被禁用");
+        if (!Integer.valueOf(SysUser.STATUS_ENABLED).equals(user.getStatus())) {
+            throw AppException.badRequest("账号已被禁用");
         }
-        if (!"admin".equals(user.getRole())) {
-            throw new RuntimeException("无管理员权限");
+        if (!SysUser.ROLE_ADMIN.equals(user.getRole())) {
+            throw AppException.forbidden("无管理员权限");
         }
 
         // 创建管理员登录态，并更新最后登录时间
@@ -209,13 +185,13 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
      */
     private void validateAutoRegisterCredentials(String username, String password) {
         if (username.length() < 2 || username.length() > 20 || !username.matches("^[\\u4e00-\\u9fa5a-zA-Z0-9_]+$")) {
-            throw new RuntimeException("账号未注册，自动注册要求用户名为2-20位，仅支持汉字、字母、数字或下划线");
+            throw AppException.badRequest("账号未注册，自动注册要求用户名为2-20位，仅支持汉字、字母、数字或下划线");
         }
         if (password.length() < 8
                 || password.length() > 64
                 || !password.matches(".*[A-Za-z].*")
                 || !password.matches(".*\\d.*")) {
-            throw new RuntimeException("账号未注册，自动注册要求密码为8-64位，且同时包含字母和数字");
+            throw AppException.badRequest("账号未注册，自动注册要求密码为8-64位，且同时包含字母和数字");
         }
     }
 
@@ -228,8 +204,8 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         user.setUsername(username);
         user.setPassword(BCrypt.hashpw(password));
         user.setNickname(username);
-        user.setRole("user");
-        user.setStatus(1);
+        user.setRole(SysUser.ROLE_USER);
+        user.setStatus(SysUser.STATUS_ENABLED);
         user.setCreateTime(LocalDateTime.now());
         this.save(user);
         return user;

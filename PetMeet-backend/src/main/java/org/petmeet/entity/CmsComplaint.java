@@ -15,10 +15,20 @@ import java.time.LocalDateTime;
 public class CmsComplaint implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    public static final int DELETE_VISIBLE = 0;
+    public static final int DELETE_DELETED = 1;
+    public static final int STATUS_PENDING = 0;
+    public static final int STATUS_HANDLED = 1;
+    public static final int STATUS_REJECTED = 2;
+
     @TableId(type = IdType.AUTO)
     private Long id;
 
     private Long noteId;
+
+    private String targetType;
+
+    private Long commentId;
 
     /**
      * 父投诉 ID，用来串起再次投诉的链路。
@@ -30,6 +40,8 @@ public class CmsComplaint implements Serializable {
     private String reason;
 
     private String content;
+
+    private String evidenceImages;
 
     private Integer status;
 

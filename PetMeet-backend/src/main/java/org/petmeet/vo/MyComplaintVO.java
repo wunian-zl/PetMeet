@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Schema(description = "My complaint item")
@@ -12,6 +13,14 @@ public class MyComplaintVO {
     private Long id;
 
     private Long noteId;
+
+    private String targetType;
+
+    private Long commentId;
+
+    private String commentContent;
+
+    private String commentAuthorName;
 
     private Long parentId;
 
@@ -22,6 +31,8 @@ public class MyComplaintVO {
     private String reason;
 
     private String content;
+
+    private List<String> evidenceImages;
 
     /**
      * 0 表示待处理，1 表示已处理，2 表示已驳回。

@@ -38,3 +38,27 @@ mvn spring-boot:run
 ```powershell
 $env:PETMEET_ADMIN_PASSWORD="管理员初始密码"
 ```
+
+## 本地开发辅助启动
+
+如果希望启动后端时同时启动Redis、用户端和管理端，可以开启：
+
+```powershell
+$env:PETMEET_DEV_LAUNCH_ALL="true"
+mvn spring-boot:run
+```
+
+默认行为：
+
+- 执行仓库根目录下的`scripts/start-redis-if-needed.ps1`，Redis已运行时不会重复启动。
+- 执行`scripts/dev-frontends.mjs`，启动用户端`5173`和管理端`5174`。
+- 后端进程退出时，自动结束前端开发进程树。
+
+可选开关：
+
+```powershell
+$env:PETMEET_DEV_LAUNCH_REDIS="false"
+$env:PETMEET_DEV_LAUNCH_FRONTENDS="false"
+```
+
+这些开关只建议本地开发使用，不要在部署环境中开启。

@@ -47,7 +47,7 @@ public class AdminComplaintController {
             @RequestParam(required = false) String remark) {
         // 调用业务层更新投诉处理状态
         complaintService.updateStatus(id, status, remark);
-        return Result.success("Updated", null);
+        return Result.success("更新成功", null);
     }
 
     /**
@@ -58,7 +58,7 @@ public class AdminComplaintController {
     public Result<Void> softDelete(@PathVariable Long id) {
         // 调用业务层软删除投诉记录
         complaintService.adminSoftDelete(id);
-        return Result.success("Deleted", null);
+        return Result.success("删除成功", null);
     }
 
     /**
@@ -69,6 +69,6 @@ public class AdminComplaintController {
     public Result<Void> batchSoftDelete(@RequestBody List<Long> ids) {
         // 调用业务层批量软删除投诉记录
         complaintService.adminBatchSoftDelete(ids);
-        return Result.success("Batch deleted", null);
+        return Result.success("批量删除成功", null);
     }
 }

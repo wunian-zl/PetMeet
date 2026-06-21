@@ -1,5 +1,7 @@
 package org.petmeet.service.impl;
 
+import org.petmeet.common.AppException;
+
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
@@ -7,6 +9,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.petmeet.entity.CmsComment;
 import org.petmeet.entity.CmsNote;
 import org.petmeet.entity.SysUser;
 import org.petmeet.mapper.CmsCommentMapper;
@@ -165,7 +168,7 @@ public class AdminNoteServiceImpl implements AdminNoteService {
         // 查询笔记详情
         CmsNote note = cmsNoteMapper.selectById(id);
         if (note == null) {
-            throw new RuntimeException("笔记不存在");
+            throw AppException.notFound("笔记不存在");
         }
         return toVO(note);
     }
@@ -178,12 +181,12 @@ public class AdminNoteServiceImpl implements AdminNoteService {
         // 查询待审核笔记
         CmsNote note = cmsNoteMapper.selectById(id);
         if (note == null) {
-            throw new RuntimeException("笔记不存在");
+            throw AppException.notFound("笔记不存在");
         }
         if (note.getStatus() != null
                 && (note.getStatus() == CmsNote.STATUS_USER_DELETED || note.getStatus() ==
                 CmsNote.STATUS_ADMIN_SOFT_DELETED)) {
-            throw new RuntimeException("已删除内容不可审核");
+            throw AppException.badRequest("已删除内容不可审核");
         }
         // 更新笔记审核结果同时刷新笔记列表缓存版本
         note.setStatus(CmsNote.STATUS_PUBLISHED);
@@ -210,10 +213,10 @@ public class AdminNoteServiceImpl implements AdminNoteService {
         // 查询待处理笔记
         CmsNote note = cmsNoteMapper.selectById(id);
         if (note == null) {
-            throw new RuntimeException("笔记不存在");    }
+            throw AppException.notFound("笔记不存在");    }
         if (note.getStatus() != null
                 && (note.getStatus() == CmsNote.STATUS_USER_DELETED || note.getStatus() == CmsNote.STATUS_ADMIN_SOFT_DELETED)) {
-            throw new RuntimeException("已删除内容不可审核");
+            throw AppException.badRequest("已删除内容不可审核");
         }
 
         // 更新审核结果和拒绝原因
@@ -243,7 +246,7 @@ public class AdminNoteServiceImpl implements AdminNoteService {
     public boolean toggleSticky(Long id) {
         CmsNote note = cmsNoteMapper.selectById(id);
         if (note == null) {
-            throw new RuntimeException("笔记不存在");
+            throw AppException.notFound("笔记不存在");
         }
         // 切换置顶状态
         boolean newSticky = !Boolean.TRUE.equals(note.getIsSticky());
@@ -260,7 +263,7 @@ public class AdminNoteServiceImpl implements AdminNoteService {
     public boolean toggleRecommend(Long id) {
         CmsNote note = cmsNoteMapper.selectById(id);
         if (note == null) {
-            throw new RuntimeException("笔记不存在");
+            throw AppException.notFound("笔记不存在");
         }
         // 切换推荐状态
         boolean newRecommend = !Boolean.TRUE.equals(note.getIsRecommended());
@@ -277,16 +280,16 @@ public class AdminNoteServiceImpl implements AdminNoteService {
     public boolean toggleShield(Long id, String reason) {
         CmsNote note = cmsNoteMapper.selectById(id);
         if (note == null) {
-            throw new RuntimeException("笔记不存在");
+            throw AppException.notFound("笔记不存在");
         }
         Integer status = note.getStatus();
         if (status == null) {
-            throw new RuntimeException("笔记状态异常");
+            throw AppException.badRequest("笔记状态异常");
         }
 
         // 只允许已通过和已下架的内容做下架或恢复。
         if (status != CmsNote.STATUS_PUBLISHED && status != CmsNote.STATUS_SHIELDED) {
-            throw new RuntimeException("仅已通过的内容才支持下架/恢复");
+            throw AppException.badRequest("仅已通过的内容才支持下架/恢复");
         }
 
         // 当前如果已经下架，就恢复为已通过；否则执行下架。
@@ -325,7 +328,7 @@ public class AdminNoteServiceImpl implements AdminNoteService {
         // 查询待删除笔记
         CmsNote note = cmsNoteMapper.selectById(id);
         if (note == null) {
-            throw new RuntimeException("笔记不存在");
+            throw AppException.notFound("笔记不存在");
         }
         if (note.getStatus() != null && note.getStatus() == CmsNote.STATUS_ADMIN_SOFT_DELETED) {
             return;
@@ -338,7 +341,7 @@ public class AdminNoteServiceImpl implements AdminNoteService {
         note.setAuditUserId(StpUtil.getLoginIdAsLong());
         note.setRejectReason(StrUtil.trimToNull(reason));
         // 这里走逻辑删除，让记录马上从管理端列表里消失。
-        note.setIsDeleted(1);
+        note.setIsDeleted(CmsNote.DELETE_DELETED);
         cmsNoteMapper.updateById(note);
         noteRedisSupport.bumpNoteListCacheVersion();
 
@@ -416,7 +419,9 @@ public class AdminNoteServiceImpl implements AdminNoteService {
         }
 
         Integer commentCount = commentMapper.selectCount(
-                new LambdaQueryWrapper<org.petmeet.entity.CmsComment>().eq(org.petmeet.entity.CmsComment::getNoteId, note.getId()))
+                new LambdaQueryWrapper<CmsComment>()
+                        .eq(CmsComment::getNoteId, note.getId())
+                        .eq(CmsComment::getStatus, CmsComment.STATUS_NORMAL))
                 .intValue();
         vo.setCommentCount(commentCount);
 

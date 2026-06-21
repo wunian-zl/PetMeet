@@ -31,7 +31,7 @@ public class NoteController {
     public Result<Long> publish(@Valid @RequestBody NotePublishDTO dto) {
         // 调用业务层发布笔记
         Long noteId = cmsNoteService.publish(dto);
-        return Result.success("Submitted for review", noteId);
+        return Result.success("已提交审核", noteId);
     }
 
     /**
@@ -108,7 +108,7 @@ public class NoteController {
     public Result<Boolean> like(@PathVariable Long id) {
         // 切换当前用户的点赞状态
         boolean liked = cmsNoteService.toggleLike(id);
-        return Result.success(liked ? "Liked" : "Unliked", liked);
+        return Result.success(liked ? "已点赞" : "已取消点赞", liked);
     }
 
     /**
@@ -120,7 +120,7 @@ public class NoteController {
     public Result<Boolean> collect(@PathVariable Long id) {
         // 切换当前用户的收藏状态
         boolean collected = cmsNoteService.toggleCollect(id);
-        return Result.success(collected ? "Collected" : "Uncollected", collected);
+        return Result.success(collected ? "已收藏" : "已取消收藏", collected);
     }
 
     /**
@@ -132,7 +132,7 @@ public class NoteController {
     public Result<Boolean> recommend(@PathVariable Long id) {
         // 切换当前用户的推荐状态
         boolean recommended = cmsNoteService.toggleRecommend(id);
-        return Result.success(recommended ? "Recommended" : "Cancelled", recommended);
+        return Result.success(recommended ? "已推荐" : "已取消推荐", recommended);
     }
 
     /**

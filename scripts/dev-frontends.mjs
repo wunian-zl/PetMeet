@@ -7,7 +7,11 @@ import { fileURLToPath } from 'node:url';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(scriptDir, '..');
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const isWindows = process.platform === 'win32';
+const npmCommand = isWindows ? 'cmd.exe' : 'npm';
+const npmArgs = isWindows
+  ? ['/d', '/s', '/c', 'npm', 'run', 'dev']
+  : ['run', 'dev'];
 const dryRun = process.argv.includes('--dry-run');
 const resetColor = '\x1b[0m';
 const frontendDir = 'PetMeet-frontend';
@@ -84,7 +88,7 @@ async function shutdown(message, exitCode) {
 
 for (const project of projects) {
   const cwd = path.join(rootDir, project.dir);
-  const child = spawn(npmCommand, ['run', 'dev'], {
+  const child = spawn(npmCommand, npmArgs, {
     cwd,
     env: process.env,
     shell: false,

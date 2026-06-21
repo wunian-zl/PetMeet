@@ -42,4 +42,7 @@ public class OmsAfterSale implements Serializable {
     public static final int STATUS_COMPLETED = 2;
     public static final int STATUS_REJECTED = 3;
     public static final int STATUS_CANCELED = 4;
+
+    public static final int DELETE_VISIBLE = 0;
+    public static final int DELETE_DELETED = 1;
 }

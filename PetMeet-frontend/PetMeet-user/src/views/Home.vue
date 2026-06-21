@@ -53,11 +53,20 @@
               v-for="note in col"
               :key="note.id"
               class="note-card"
+              :class="{ 'cover-ready': isNoteCardReady(note) }"
               @click="openDetail(note, $event)"
             >
             <!-- 封面图 -->
-              <div class="card-cover">
-                <img :src="note.coverImg" alt="cover" loading="lazy" decoding="async" @error="handleNoteCoverError($event, note)" />
+              <div class="card-cover" :style="{ '--cover-ratio': note.coverRatio || DEFAULT_COVER_RATIO }">
+                <img
+                  :src="note.coverImg"
+                  alt="cover"
+                  loading="lazy"
+                  decoding="async"
+                  @load="handleNoteCoverLoad($event, note)"
+                  @error="handleNoteCoverError($event, note)"
+                />
+                <div v-if="!isNoteCardReady(note)" class="cover-placeholder" aria-hidden="true"></div>
                 
             <!-- 电商标签 -->
                 <div v-if="note.productCount && note.productCount > 0" class="shop-tag">
@@ -197,6 +206,31 @@ const tagOptions = [
   { label: "日常", value: "日常" }
 ]
 
+const DEFAULT_COVER_RATIO = '4 / 5'
+const MIN_COVER_RATIO = 0.72
+const MAX_COVER_RATIO = 1.35
+
+const toCoverRatio = (width, height) => {
+  const numericWidth = Number(width)
+  const numericHeight = Number(height)
+  if (!numericWidth || !numericHeight || numericWidth <= 0 || numericHeight <= 0) {
+    return DEFAULT_COVER_RATIO
+  }
+  const ratio = Math.min(MAX_COVER_RATIO, Math.max(MIN_COVER_RATIO, numericWidth / numericHeight))
+  return `${ratio.toFixed(3)} / 1`
+}
+
+const isNoteCardReady = (note) => Boolean(note?.coverLoaded || note?.coverFailed)
+
+const normalizeComparableUrl = (src) => {
+  if (!src) return ''
+  try {
+    return new URL(src, window.location.origin).href
+  } catch (e) {
+    return src
+  }
+}
+
 // 简单节流一下，别让滚动事件打太满
 const throttle = (func, delay) => {
   let lastCall = 0
@@ -299,6 +333,9 @@ const fetchNotes = async (append = false) => {
         coverImgRaw: note.coverImg || '',
         coverThumbRaw: note.coverThumb || '',
         coverImg: getImageUrl(note.coverThumb || note.coverImg),
+        coverRatio: toCoverRatio(note.coverWidth || note.imageWidth, note.coverHeight || note.imageHeight),
+        coverLoaded: false,
+        coverFailed: false,
         authorAvatar: getAvatarUrl(note.authorAvatar),
         authorName: note.authorNickname || '用户'
       }))
@@ -448,11 +485,26 @@ const handleNoteCoverError = (event, note) => {
   const target = event?.target
   if (!target) return
   const fallback = note?.coverImgRaw ? getImageUrl(note.coverImgRaw) : ''
-  if (fallback && target.src !== fallback) {
+  const currentSrc = normalizeComparableUrl(target.currentSrc || target.src)
+  if (fallback && currentSrc !== normalizeComparableUrl(fallback)) {
     target.src = fallback
     return
   }
-  target.src = getImageUrl('')
+  const placeholder = getImageUrl('')
+  if (currentSrc !== normalizeComparableUrl(placeholder)) {
+    target.src = placeholder
+    return
+  }
+  note.coverFailed = true
+  note.coverLoaded = true
+}
+
+const handleNoteCoverLoad = (event, note) => {
+  const target = event?.target
+  if (!target || !note) return
+  note.coverRatio = toCoverRatio(target.naturalWidth, target.naturalHeight)
+  note.coverLoaded = true
+  note.coverFailed = false
 }
 
 // 打开详情弹窗，并把地址推到历史栈里
@@ -787,6 +839,47 @@ watch(
   contain: layout paint; /* Optimized contain */
   
   box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+
+  &.cover-ready {
+    .card-cover img {
+      opacity: 1;
+    }
+
+    .card-title,
+    .card-footer {
+      animation: noteContentIn 0.18s ease both;
+    }
+  }
+
+  &:not(.cover-ready) {
+    .card-title,
+    .card-footer {
+      visibility: hidden;
+    }
+
+    .card-body::before,
+    .card-body::after {
+      content: '';
+      position: absolute;
+      left: 14px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #f3f3f3 0%, #ffecef 48%, #f3f3f3 100%);
+      background-size: 220% 100%;
+      animation: coverShimmer 1.2s ease-in-out infinite;
+    }
+
+    .card-body::before {
+      top: 16px;
+      width: 72%;
+      height: 14px;
+    }
+
+    .card-body::after {
+      bottom: 18px;
+      width: 52%;
+      height: 12px;
+    }
+  }
   
   &:hover {
     transform: translateY(-4px) translateZ(0);
@@ -800,16 +893,28 @@ watch(
   .card-cover {
     position: relative;
     width: 100%;
+    aspect-ratio: var(--cover-ratio, 4 / 5);
     overflow: hidden;
-    background-color: #f5f5f5;
-    min-height: 180px; /* Reduce layout shift impact */
+    background: #f7f7f7;
     
     img {
       width: 100%;
-      height: auto;
+      height: 100%;
       display: block;
-      transition: transform 0.3s ease;
+      object-fit: cover;
+      opacity: 0;
+      transition: opacity 0.2s ease, transform 0.3s ease;
       transform: translateZ(0);
+    }
+
+    .cover-placeholder {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(105deg, #f7f7f7 0%, #fff1f4 45%, #f7f7f7 80%);
+      background-size: 220% 100%;
+      animation: coverShimmer 1.2s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 1;
     }
     
     .shop-tag {
@@ -847,6 +952,7 @@ watch(
   }
 
   .card-body {
+    position: relative;
     padding: 12px 14px 16px;
   }
 
@@ -902,6 +1008,26 @@ watch(
         &:hover { color: #FF6B81; } // Pink Heart Hover
       }
     }
+  }
+}
+
+@keyframes coverShimmer {
+  0% {
+    background-position: 160% 0;
+  }
+  100% {
+    background-position: -60% 0;
+  }
+}
+
+@keyframes noteContentIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

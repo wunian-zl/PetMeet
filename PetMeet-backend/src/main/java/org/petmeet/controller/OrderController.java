@@ -33,7 +33,7 @@ public class OrderController {
     public Result<Long> submitOrder(@Valid @RequestBody OrderSubmitDTO dto) {
         // 调用业务层创建订单
         Long orderId = orderService.submitOrder(dto);
-        return Result.success("Order submitted", orderId);
+        return Result.success("订单已提交", orderId);
     }
 
     /**
@@ -55,7 +55,7 @@ public class OrderController {
     public Result<Page<OrderDetailVO>> listMyOrders(
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
-            @Parameter(description = "Order status: 0 pending-pay, 1 paid, 2 shipped, 3 completed, 4 closed, 5 refunding")
+            @Parameter(description = "订单状态:0待支付,1已支付,2已发货,3已完成,4已关闭,5退款中")
             @RequestParam(required = false) Integer status,
             @Parameter(description = "Review status: 0 pending, 1 reviewed")
             @RequestParam(required = false) Integer reviewStatus) {
@@ -71,7 +71,7 @@ public class OrderController {
     public Result<Void> pay(@PathVariable Long id) {
         // 调用业务层把订单改成已支付
         orderService.pay(id);
-        return Result.success("Payment success", null);
+        return Result.success("支付成功", null);
     }
 
     /**
@@ -82,7 +82,7 @@ public class OrderController {
     public Result<Void> cancel(@PathVariable Long id) {
         // 调用业务层取消订单
         orderService.cancel(id);
-        return Result.success("Order cancel request accepted", null);
+        return Result.success("订单取消请求已提交", null);
     }
 
     /**
@@ -93,7 +93,7 @@ public class OrderController {
     public Result<Void> confirm(@PathVariable Long id) {
         // 调用业务层确认收货
         orderService.confirmReceipt(id);
-        return Result.success("Receipt confirmed", null);
+        return Result.success("已确认收货", null);
     }
 
     /**
@@ -104,7 +104,7 @@ public class OrderController {
     public Result<Void> review(@PathVariable Long id, @Valid @RequestBody OrderReviewDTO dto) {
         // 调用业务层提交订单评价
         orderService.review(id, dto);
-        return Result.success("Review submitted", null);
+        return Result.success("评价已提交", null);
     }
 
     /**
@@ -115,7 +115,7 @@ public class OrderController {
     public Result<Void> deleteReview(@PathVariable Long id) {
         // 调用业务层删除订单评价
         orderService.deleteReview(id);
-        return Result.success("Review deleted", null);
+        return Result.success("评价已删除", null);
     }
 
     /**
@@ -126,7 +126,7 @@ public class OrderController {
     public Result<Void> deleteMyOrder(@PathVariable Long id) {
         // 调用业务层删除当前用户订单
         orderService.deleteMyOrder(id);
-        return Result.success("Order deleted", null);
+        return Result.success("订单已删除", null);
     }
 
     /**
@@ -137,6 +137,6 @@ public class OrderController {
     public Result<Void> batchDeleteMyOrders(@RequestBody List<Long> orderIds) {
         // 调用业务层批量删除订单
         orderService.batchDeleteMyOrders(orderIds);
-        return Result.success("Orders deleted", null);
+        return Result.success("订单已批量删除", null);
     }
 }

@@ -129,6 +129,17 @@ export function getCommentList(params) {
 }
 
 /**
+ * 获取评论回复列表
+ */
+export function getCommentReplies(id, params) {
+    return request({
+        url: `/admin/comment/${id}/replies`,
+        method: 'get',
+        params
+    })
+}
+
+/**
  * 删除评论
  */
 export function deleteComment(id) {

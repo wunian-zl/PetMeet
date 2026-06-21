@@ -47,7 +47,7 @@ public class UploadController {
     private static final Set<String> VIDEO_TYPES = Set.of("mp4", "avi", "mov");
     private static final Set<String> IMAGE_BIZ_TYPES = Set.of(
             "userAvatar", "userImage", "productCover", "productDetail",
-            "shopBannerImage", "noteImage", "scienceTopicImage");
+            "shopBannerImage", "noteImage", "scienceTopicImage", "complaintEvidence");
     private static final Set<String> VIDEO_BIZ_TYPES = Set.of("userVideo", "noteVideo");
     private static final Set<String> ADMIN_ONLY_BIZ_TYPES = Set.of(
             "productCover", "productDetail", "shopBannerImage", "scienceTopicImage");
@@ -68,6 +68,8 @@ public class UploadController {
             // 社区笔记
             Map.entry("noteImage", "note/image"),
             Map.entry("noteVideo", "note/video"),
+            // 投诉凭证
+            Map.entry("complaintEvidence", "complaint/evidence"),
             // 科普栏目（cms_banner）
             Map.entry("scienceTopicImage", "science/topic/image")
     );
@@ -90,12 +92,12 @@ public class UploadController {
     private Result<String> saveFile(MultipartFile file, String biz) {
         // 校验文件是否为空
         if (file == null || file.isEmpty()) {
-            return Result.error("请选择要上传的文件");
+            return Result.badRequest("请选择要上传的文件");
         }
 
         // 校验文件大小
         if (file.getSize() > MAX_FILE_SIZE) {
-            return Result.error("文件大小不能超过10MB");
+            return Result.badRequest("文件大小不能超过10MB");
         }
 
         // 读取原文件名和后缀
@@ -103,24 +105,24 @@ public class UploadController {
         String extension = FileUtil.extName(originalFilename);
 
         if (StrUtil.isBlank(extension)) {
-            return Result.error("无法识别文件类型");
+            return Result.badRequest("无法识别文件类型");
         }
 
         // 校验文件类型是否合法
         if (!ALLOWED_FILE_TYPES.contains(extension.toLowerCase())) {
-            return Result.error("不支持的文件类型: " + extension);
+            return Result.badRequest("不支持的文件类型:" + extension);
         }
 
         String normalizedExtension = extension.toLowerCase();
         String bizKey = normalizeBiz(biz);
         if (IMAGE_BIZ_TYPES.contains(bizKey) && !ALLOWED_IMAGE_TYPES.contains(normalizedExtension)) {
-            return Result.error("当前业务仅支持图片文件");
+            return Result.badRequest("当前业务仅支持图片文件");
         }
         if (VIDEO_BIZ_TYPES.contains(bizKey) && !VIDEO_TYPES.contains(normalizedExtension)) {
-            return Result.error("当前业务仅支持视频文件");
+            return Result.badRequest("当前业务仅支持视频文件");
         }
         if (!matchesFileSignature(file, normalizedExtension)) {
-            return Result.error("文件内容与扩展名不匹配");
+            return Result.badRequest("文件内容与扩展名不匹配");
         }
 
         try {
@@ -130,7 +132,7 @@ public class UploadController {
             // 根据业务标识确定保存目录
             String bizDir = resolveBizDir(biz);
             if (bizDir == null) {
-                return Result.error("不支持的业务类型 biz: " + biz);
+                return Result.badRequest("不支持的业务类型biz:" + biz);
             }
 
             // 生成按年月分类的目录结构
@@ -175,13 +177,13 @@ public class UploadController {
 
         // 校验图片是否为空
         if (file == null || file.isEmpty()) {
-            return Result.error("请选择要上传的图片");
+            return Result.badRequest("请选择要上传的图片");
         }
 
         // 校验图片格式
         String extension = FileUtil.extName(file.getOriginalFilename());
         if (StrUtil.isBlank(extension) || !ALLOWED_IMAGE_TYPES.contains(extension.toLowerCase())) {
-            return Result.error("仅支持上传图片格式: " + String.join(", ", ALLOWED_IMAGE_TYPES));
+            return Result.badRequest("仅支持上传图片格式:" + String.join(",", ALLOWED_IMAGE_TYPES));
         }
 
         // 复用单文件上传逻辑
@@ -200,12 +202,12 @@ public class UploadController {
 
         // 校验文件数组是否为空
         if (files == null || files.length == 0) {
-            return Result.error("请选择要上传的文件");
+            return Result.badRequest("请选择要上传的文件");
         }
 
         // 限制单次上传数量
         if (files.length > 9) {
-            return Result.error("一次最多上传9个文件");
+            return Result.badRequest("一次最多上传9个文件");
         }
 
         List<String> urls = new java.util.ArrayList<>();
@@ -216,7 +218,7 @@ public class UploadController {
             if (result.isSuccess()) {
                 urls.add(result.getData());
             } else {
-                return Result.error("文件 " + file.getOriginalFilename() + " 上传失败: " + result.getMsg());
+                return Result.badRequest("文件" + file.getOriginalFilename() + "上传失败:" + result.getMsg());
             }
         }
 

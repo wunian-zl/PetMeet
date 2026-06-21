@@ -1,5 +1,7 @@
 package org.petmeet.service.impl;
 
+import org.petmeet.common.AppException;
+
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -30,7 +32,7 @@ public class FollowServiceImpl implements FollowService {
     public boolean toggleFollow(Long followeeId) {
         Long followerId = StpUtil.getLoginIdAsLong();
         if (followeeId == null || followerId.equals(followeeId)) {
-            throw new RuntimeException("不能关注自己");
+            throw AppException.badRequest("不能关注自己");
         }
 
         LambdaQueryWrapper<SysFollow> wrapper = new LambdaQueryWrapper<>();

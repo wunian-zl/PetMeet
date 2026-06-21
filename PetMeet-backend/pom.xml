@@ -37,6 +37,7 @@
         <knife4j.version>4.5.0</knife4j.version>
         <hutool.version>5.8.25</hutool.version>
         <fastjson2.version>2.0.45</fastjson2.version>
+        <alipay-sdk.version>4.40.771.ALL</alipay-sdk.version>
     </properties>
     <dependencies>
         <!-- ================== Spring Boot 核心 ================== -->
@@ -117,6 +118,12 @@
             <groupId>com.alibaba.fastjson2</groupId>
             <artifactId>fastjson2</artifactId>
             <version>${fastjson2.version}</version>
+        </dependency>
+        <!-- 支付宝开放平台SDK，用于沙箱扫码支付和回调验签 -->
+        <dependency>
+            <groupId>com.alipay.sdk</groupId>
+            <artifactId>alipay-sdk-java</artifactId>
+            <version>${alipay-sdk.version}</version>
         </dependency>
         <!-- Lombok -->
         <dependency>

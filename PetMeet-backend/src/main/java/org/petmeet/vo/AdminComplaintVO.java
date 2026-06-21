@@ -4,12 +4,26 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Schema(description = "Admin complaint view")
 public class AdminComplaintVO {
     private Long id;
     private Long noteId;
+    private String targetType;
+    private Long commentId;
+    private String commentContent;
+    private Long commentAuthorId;
+    private String commentAuthorName;
+    private Long commentParentId;
+    private Long commentReplyToId;
+    private LocalDateTime commentCreateTime;
+    private Boolean commentDeleted;
+    private String parentCommentContent;
+    private String parentCommentAuthorName;
+    private String replyToContent;
+    private String replyToAuthorName;
     private Long parentId;
     private String noteTitle;
     private Long noteAuthorId;
@@ -21,6 +35,7 @@ public class AdminComplaintVO {
 
     private String reason;
     private String content;
+    private List<String> evidenceImages;
     private Integer status;
 
     private String handleRemark;

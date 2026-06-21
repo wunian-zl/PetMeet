@@ -14,14 +14,27 @@ import java.time.LocalDateTime;
 public class CmsComment implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    public static final int STATUS_NORMAL = 0;
+    public static final int STATUS_DELETED = 1;
+
     @TableId(type = IdType.AUTO)
     private Long id;
 
     private Long noteId;
 
+    private Long parentId;
+
+    private Long replyToId;
+
     private Long userId;
 
     private String content;
 
+    private Integer likeCount;
+
+    private Integer status;
+
     private LocalDateTime createTime;
+
+    private LocalDateTime deleteTime;
 }

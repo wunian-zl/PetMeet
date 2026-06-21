@@ -26,4 +26,7 @@ public class OrderSubmitDTO {
 
     @Schema(description = "订单备注")
     private String remark;
+
+    @Schema(description = "用户选择的支付方式:ALIPAY或WECHAT_MOCK")
+    private String payType;
 }

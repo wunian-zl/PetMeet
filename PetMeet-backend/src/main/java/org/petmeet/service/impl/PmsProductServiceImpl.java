@@ -1,5 +1,7 @@
 package org.petmeet.service.impl;
 
+import org.petmeet.common.AppException;
+
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson2.JSON;
@@ -53,7 +55,7 @@ public class PmsProductServiceImpl extends ServiceImpl<PmsProductMapper, PmsProd
                                         Integer pageSize, List<Long>
             categoryIds, String keyword, Integer recentDays) {
         LambdaQueryWrapper<PmsProduct> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(PmsProduct::getStatus, 1);
+        wrapper.eq(PmsProduct::getStatus, PmsProduct.STATUS_ON_SHELF);
         if (categoryIds != null && !categoryIds.isEmpty()) {
             wrapper.in(PmsProduct::getCategoryId, categoryIds); }
         if (StrUtil.isNotBlank(keyword)) {
@@ -83,7 +85,7 @@ public class PmsProductServiceImpl extends ServiceImpl<PmsProductMapper, PmsProd
     public ProductDetailVO getDetail(Long productId) {
         PmsProduct product = this.getById(productId);
         if (product == null) {
-            throw new RuntimeException("商品不存在");
+            throw AppException.notFound("商品不存在");
         }
 
         // 先把商品主信息拷贝到详情对象
@@ -120,10 +122,10 @@ public class PmsProductServiceImpl extends ServiceImpl<PmsProductMapper, PmsProd
     public boolean deductStock(Long productId, Integer quantity) {
         PmsProduct product = this.getById(productId);
         if (product == null) {
-            throw new RuntimeException("商品不存在");
+            throw AppException.notFound("商品不存在");
         }
         if (product.getStock() < quantity) {
-            throw new RuntimeException("库存不足");
+            throw AppException.badRequest("库存不足");
         }
 
         LambdaUpdateWrapper<PmsProduct> wrapper = new LambdaUpdateWrapper<>();

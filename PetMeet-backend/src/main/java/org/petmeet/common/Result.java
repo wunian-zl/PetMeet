@@ -6,7 +6,8 @@ import lombok.Data;
 @Data
 @Schema(description = "API统一响应结果")
 public class Result<T> {
-    @Schema(description = "状态码：200成功，401未登录，403无权限，500失败")
+
+    @Schema(description = "状态码:200成功,400参数错误,401未登录,403无权限,404资源不存在,409状态冲突,500系统错误")
     private Integer code;
 
     @Schema(description = "提示信息")
@@ -46,29 +47,35 @@ public class Result<T> {
     }
 
     public static <T> Result<T> error(String msg) {
+        return fail(500, msg);
+    }
+
+    public static <T> Result<T> fail(Integer code, String msg) {
         Result<T> result = new Result<>();
-        result.setCode(500);
+        result.setCode(code);
         result.setMsg(msg);
         result.setData(null);
         result.setSuccess(false);
         return result;
+    }
+
+    public static <T> Result<T> badRequest(String msg) {
+        return fail(400, msg);
     }
 
     public static <T> Result<T> notLogin(String msg) {
-        Result<T> result = new Result<>();
-        result.setCode(401);
-        result.setMsg(msg);
-        result.setData(null);
-        result.setSuccess(false);
-        return result;
+        return fail(401, msg);
     }
 
     public static <T> Result<T> noPermission(String msg) {
-        Result<T> result = new Result<>();
-        result.setCode(403);
-        result.setMsg(msg);
-        result.setData(null);
-        result.setSuccess(false);
-        return result;
+        return fail(403, msg);
+    }
+
+    public static <T> Result<T> notFound(String msg) {
+        return fail(404, msg);
+    }
+
+    public static <T> Result<T> conflict(String msg) {
+        return fail(409, msg);
     }
 }

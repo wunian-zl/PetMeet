@@ -19,6 +19,8 @@ public class CmsNote implements Serializable {
     public static final int STATUS_USER_OFF_SHELF = 4;
     public static final int STATUS_USER_DELETED = 5;
     public static final int STATUS_ADMIN_SOFT_DELETED = 6;
+    public static final int DELETE_VISIBLE = 0;
+    public static final int DELETE_DELETED = 1;
 
     @TableId(type = IdType.AUTO)
     private Long id;

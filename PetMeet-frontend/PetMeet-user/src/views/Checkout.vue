@@ -116,12 +116,12 @@
         <div class="pay-methods">
           <div class="method-title">支付方式</div>
           <el-radio-group v-model="payType" class="pay-group">
-            <el-radio label="alipay">
+            <el-radio label="ALIPAY">
                <span class="pay-label">
                   <span class="icon alipay">支</span> 支付宝
                </span>
             </el-radio>
-            <el-radio label="wechat">
+            <el-radio label="WECHAT_MOCK">
                <span class="pay-label">
                   <span class="icon wechat">微</span> 微信支付
                </span>
@@ -192,7 +192,7 @@ const loadingAddress = ref(false)
 const selectedAddressId = ref(null)
 const remark = ref('')
 const submitting = ref(false)
-const payType = ref('alipay')
+const payType = ref('ALIPAY')
 
 const totalPrice = computed(() => {
   return cartList.value
@@ -250,7 +250,8 @@ const submitOrder = async () => {
     const orderId = await request.post('/order/submit', {
       cartItemIds,
       addressId: selectedAddressId.value,
-      remark: remark.value || ''
+      remark: remark.value || '',
+      payType: payType.value
     })
     ElMessage.success('下单成功，正在跳转支付')
     await userStore.fetchCartCount()
@@ -258,7 +259,7 @@ const submitOrder = async () => {
       path: '/pay',
       query: {
         orderId,
-        amount: totalPrice.value
+        payType: payType.value
       }
     })
   } finally {

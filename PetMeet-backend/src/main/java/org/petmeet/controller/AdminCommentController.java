@@ -33,6 +33,15 @@ public class AdminCommentController {
         return Result.success(commentService.pageList(noteId, pageNum, pageSize));
     }
 
+    @GetMapping("/{id}/replies")
+    @Operation(summary = "评论回复列表")
+    public Result<Page<CommentVO>> replies(
+            @PathVariable Long id,
+            @Parameter(description = "页码") @RequestParam(defaultValue = "1") Integer pageNum,
+            @Parameter(description = "每页数量") @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(commentService.pageReplies(id, pageNum, pageSize));
+    }
+
     /**
      * 删除评论
      */

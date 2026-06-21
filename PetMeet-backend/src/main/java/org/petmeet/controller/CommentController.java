@@ -16,45 +16,49 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/comment")
 @RequiredArgsConstructor
-@Tag(name = "评论接口", description = "评论发布与列表")
+@Tag(name = "Comment", description = "Comment APIs")
 public class CommentController {
 
     private final CmsCommentService commentService;
 
-    /**
-     * 评论列表
-     */
     @GetMapping("/list")
-    @Operation(summary = "评论列表")
+    @Operation(summary = "Comment list")
     public Result<Page<CommentVO>> list(
-            @Parameter(description = "笔记ID") @RequestParam Long noteId,
-            @Parameter(description = "页码") @RequestParam(defaultValue = "1") Integer pageNum,
-            @Parameter(description = "每页数量") @RequestParam(defaultValue = "10") Integer pageSize) {
-        // 查询指定笔记下的评论列表
+            @Parameter(description = "Note id") @RequestParam Long noteId,
+            @Parameter(description = "Page number") @RequestParam(defaultValue = "1") Integer pageNum,
+            @Parameter(description = "Page size") @RequestParam(defaultValue = "10") Integer pageSize) {
         return Result.success(commentService.pageList(noteId, pageNum, pageSize));
     }
 
-    /**
-     * 发表评论
-     */
-    @PostMapping("/add")
-    @SaCheckLogin
-    @Operation(summary = "发表评论")
-    public Result<Long> add(@Valid @RequestBody CommentCreateDTO dto) {
-        // 调用业务层新增评论
-        Long id = commentService.addComment(dto);
-        return Result.success("评论成功", id);
+    @GetMapping("/{id}/replies")
+    @Operation(summary = "Comment replies")
+    public Result<Page<CommentVO>> replies(
+            @PathVariable Long id,
+            @Parameter(description = "Page number") @RequestParam(defaultValue = "1") Integer pageNum,
+            @Parameter(description = "Page size") @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(commentService.pageReplies(id, pageNum, pageSize));
     }
 
-    /**
-     * 删除评论
-     */
+    @PostMapping("/add")
+    @SaCheckLogin
+    @Operation(summary = "Create comment")
+    public Result<Long> add(@Valid @RequestBody CommentCreateDTO dto) {
+        Long id = commentService.addComment(dto);
+        return Result.success("评论已发布", id);
+    }
+
+    @PostMapping("/{id}/like")
+    @SaCheckLogin
+    @Operation(summary = "Toggle comment like")
+    public Result<Boolean> like(@PathVariable Long id) {
+        return Result.success(commentService.toggleLike(id));
+    }
+
     @DeleteMapping("/{id}")
     @SaCheckLogin
-    @Operation(summary = "删除评论")
+    @Operation(summary = "Delete comment")
     public Result<Void> delete(@PathVariable Long id) {
-        // 调用业务层删除评论
         commentService.deleteComment(id);
-        return Result.success("删除成功", null);
+        return Result.success("评论已删除", null);
     }
 }

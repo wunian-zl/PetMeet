@@ -48,7 +48,7 @@ public class AdminAfterSaleController {
             @RequestParam(required = false) String remark) {
         // 调用业务层更新售后状态
         adminAfterSaleService.updateStatus(id, status, remark);
-        return Result.success("Status updated", null);
+        return Result.success("状态已更新", null);
     }
 
     /**
@@ -59,7 +59,7 @@ public class AdminAfterSaleController {
     public Result<Void> softDelete(@PathVariable Long id) {
         // 调用业务层软删除售后记录
         adminAfterSaleService.softDelete(id);
-        return Result.success("Deleted", null);
+        return Result.success("删除成功", null);
     }
 
     /**
@@ -70,6 +70,6 @@ public class AdminAfterSaleController {
     public Result<Void> batchSoftDelete(@RequestBody List<Long> ids) {
         // 调用业务层批量软删除售后记录
         adminAfterSaleService.batchSoftDelete(ids);
-        return Result.success("Batch deleted", null);
+        return Result.success("批量删除成功", null);
     }
 }

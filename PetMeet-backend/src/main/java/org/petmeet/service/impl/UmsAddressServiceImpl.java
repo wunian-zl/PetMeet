@@ -1,5 +1,7 @@
 package org.petmeet.service.impl;
 
+import org.petmeet.common.AppException;
+
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.bean.BeanUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -50,7 +52,7 @@ public class UmsAddressServiceImpl extends ServiceImpl<UmsAddressMapper, UmsAddr
 
         UmsAddress existing = this.getById(dto.getId());
         if (existing == null || !existing.getUserId().equals(userId)) {
-            throw new RuntimeException("地址不存在");
+            throw AppException.notFound("地址不存在");
         }
 
         // 新默认地址会覆盖旧默认地址
@@ -71,7 +73,7 @@ public class UmsAddressServiceImpl extends ServiceImpl<UmsAddressMapper, UmsAddr
 
         UmsAddress existing = this.getById(id);
         if (existing == null || !existing.getUserId().equals(userId)) {
-            throw new RuntimeException("地址不存在");
+            throw AppException.notFound("地址不存在");
         }
 
         this.removeById(id);

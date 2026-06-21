@@ -14,6 +14,18 @@ $userDir = Join-Path $repoRoot "PetMeet-frontend\PetMeet-user"
 $adminDir = Join-Path $repoRoot "PetMeet-frontend\PetMeet-admin"
 $zipPath = "$OutputDir.zip"
 
+function Invoke-Checked {
+  param(
+    [scriptblock]$Command,
+    [string]$Label
+  )
+
+  & $Command
+  if ($LASTEXITCODE -ne 0) {
+    throw "$Label failed with exit code $LASTEXITCODE."
+  }
+}
+
 if (Test-Path $OutputDir) {
   Remove-Item -LiteralPath $OutputDir -Recurse -Force
 }
@@ -25,15 +37,15 @@ New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
 Push-Location $backendDir
 try {
-  & .\mvnw.cmd clean package -DskipTests
+  Invoke-Checked { & .\mvnw.cmd clean package -DskipTests } "Backend build"
 } finally {
   Pop-Location
 }
 
 Push-Location $userDir
 try {
-  npm ci
-  npm run build
+  Invoke-Checked { & npm.cmd ci } "User frontend npm ci"
+  Invoke-Checked { & npm.cmd run build } "User frontend build"
 } finally {
   Pop-Location
 }
@@ -41,8 +53,8 @@ try {
 Push-Location $adminDir
 try {
   $env:VITE_APP_BASE = "/admin/"
-  npm ci
-  npm run build
+  Invoke-Checked { & npm.cmd ci } "Admin frontend npm ci"
+  Invoke-Checked { & npm.cmd run build } "Admin frontend build"
 } finally {
   Remove-Item Env:\VITE_APP_BASE -ErrorAction SilentlyContinue
   Pop-Location
@@ -66,7 +78,30 @@ New-Item -ItemType Directory -Force -Path (Join-Path $OutputDir "frontend") | Ou
 Copy-Item -LiteralPath (Join-Path $userDir "dist") -Destination (Join-Path $OutputDir "frontend\user") -Recurse
 Copy-Item -LiteralPath (Join-Path $adminDir "dist") -Destination (Join-Path $OutputDir "frontend\admin") -Recurse
 
-Compress-Archive -Path (Join-Path $OutputDir "*") -DestinationPath $zipPath -Force
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$sourceRoot = (Resolve-Path $OutputDir).Path
+$sourcePrefix = $sourceRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+$zipStream = [System.IO.File]::Open($zipPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::ReadWrite)
+try {
+  $archive = New-Object System.IO.Compression.ZipArchive($zipStream, [System.IO.Compression.ZipArchiveMode]::Create)
+  try {
+    Get-ChildItem -LiteralPath $sourceRoot -Recurse -File | ForEach-Object {
+      $relativePath = $_.FullName.Substring($sourcePrefix.Length)
+      $entryName = $relativePath -replace "\\", "/"
+      [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+        $archive,
+        $_.FullName,
+        $entryName,
+        [System.IO.Compression.CompressionLevel]::Optimal
+      ) | Out-Null
+    }
+  } finally {
+    $archive.Dispose()
+  }
+} finally {
+  $zipStream.Dispose()
+}
 
 Write-Host "Deployment bundle created:"
 Write-Host "  $zipPath"

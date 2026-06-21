@@ -205,6 +205,21 @@
           </div>
           <div class="detail-row"><span class="label">原因：</span>{{ complaintDetail.reason || '-' }}</div>
           <div v-if="complaintDetail.content" class="detail-row pre"><span class="label">说明：</span>{{ complaintDetail.content }}</div>
+          <div v-if="complaintEvidenceImages(complaintDetail).length" class="detail-row evidence-detail-row">
+            <span class="label">凭证：</span>
+            <div class="complaint-evidence-grid">
+              <el-image
+                v-for="(img, idx) in complaintEvidenceImages(complaintDetail)"
+                :key="`complaint-evidence-${idx}`"
+                class="complaint-evidence-image"
+                :src="img"
+                :preview-src-list="complaintEvidenceImages(complaintDetail)"
+                :initial-index="idx"
+                fit="cover"
+                preview-teleported
+              />
+            </div>
+          </div>
           <div class="detail-row"><span class="label">状态：</span>{{ complaintStatusText(complaintDetail.status) }}</div>
           <div class="detail-row"><span class="label">提交时间：</span>{{ formatDateTime(complaintDetail.createTime) }}</div>
           <div v-if="complaintDetail.handleTime" class="detail-row"><span class="label">处理时间：</span>{{ formatDateTime(complaintDetail.handleTime) }}</div>
@@ -373,6 +388,11 @@ const headerLoading = computed(() =>
 const hasPendingComplaint = computed(() =>
   (complaintList.value || []).some((item) => item?.status === 0)
 )
+
+const complaintEvidenceImages = (item) => {
+  if (!Array.isArray(item?.evidenceImages)) return []
+  return item.evidenceImages.filter(Boolean).map((img) => getImageUrl(img))
+}
 
 const latestComplaintIdByNote = computed(() => {
   const map = {}
@@ -1248,6 +1268,27 @@ onMounted(() => {
 .detail-row.pre {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.evidence-detail-row {
+  display: flex;
+  align-items: flex-start;
+}
+
+.complaint-evidence-grid {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.complaint-evidence-image {
+  width: 76px;
+  height: 76px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #ebeef5;
+  background: #f5f7fa;
+  cursor: pointer;
 }
 
 .dialog-footer {

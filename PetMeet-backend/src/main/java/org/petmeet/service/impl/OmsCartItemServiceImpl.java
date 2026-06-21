@@ -1,5 +1,7 @@
 package org.petmeet.service.impl;
 
+import org.petmeet.common.AppException;
+
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -35,19 +37,19 @@ public class OmsCartItemServiceImpl extends ServiceImpl<OmsCartItemMapper, OmsCa
         PmsProduct product = pmsProductService.
                 getById(dto.getProductId());
         if (product == null)
-            throw new RuntimeException("商品不存在");
+            throw AppException.notFound("商品不存在");
         if (product.getStatus() != 1)
-            throw new RuntimeException("商品已下架");
+            throw AppException.badRequest("商品已下架");
         if (product.getStock() < dto.getQuantity())
-            throw new RuntimeException("商品库存不足");
+            throw AppException.badRequest("商品库存不足");
         // 已经在购物车里的商品要累计数量
         OmsCartItem existing = this.baseMapper.
                 selectByUserAndProductIgnoreDeleted(userId, dto.getProductId());
         int newQty = dto.getQuantity();
-        if (existing != null && !Integer.valueOf(1).equals(existing.getIsDeleted())) {
+        if (existing != null && !Integer.valueOf(OmsCartItem.DELETE_DELETED).equals(existing.getIsDeleted())) {
             newQty = existing.getQuantity() + dto.getQuantity(); }
         if (newQty > product.getStock())
-            throw new RuntimeException("超出库存限制");
+            throw AppException.badRequest("超出库存限制");
         // 插入或更新购物车项
         this.baseMapper.upsertCartItem(userId, dto.getProductId(),
                 dto.getQuantity(), LocalDateTime.now());
@@ -61,7 +63,7 @@ public class OmsCartItemServiceImpl extends ServiceImpl<OmsCartItemMapper, OmsCa
         Long userId = StpUtil.getLoginIdAsLong();
         OmsCartItem item = this.getById(cartItemId);
         if (item == null || !item.getUserId().equals(userId))
-            throw new RuntimeException("购物车项不存在");
+            throw AppException.notFound("购物车项不存在");
 
         // 数量小于等于 0 时直接删除购物车项
         if (quantity <= 0) {
@@ -70,7 +72,7 @@ public class OmsCartItemServiceImpl extends ServiceImpl<OmsCartItemMapper, OmsCa
             // 更新前再次校验库存
             PmsProduct product = pmsProductService.getById(item.getProductId());
             if (product != null && quantity > product.getStock()) {
-                throw new RuntimeException("超出库存限制");
+                throw AppException.badRequest("超出库存限制");
             }
             item.setQuantity(quantity);
             this.updateById(item);
@@ -85,7 +87,7 @@ public class OmsCartItemServiceImpl extends ServiceImpl<OmsCartItemMapper, OmsCa
         Long userId = StpUtil.getLoginIdAsLong();
         OmsCartItem item = this.getById(cartItemId);
         if (item == null || !item.getUserId().equals(userId))
-            throw new RuntimeException("购物车项不存在");
+            throw AppException.notFound("购物车项不存在");
         this.removeById(cartItemId);
     }
 
@@ -189,7 +191,7 @@ public class OmsCartItemServiceImpl extends ServiceImpl<OmsCartItemMapper, OmsCa
         Long userId = StpUtil.getLoginIdAsLong();
         OmsCartItem item = this.getById(cartItemId);
         if (item == null || !item.getUserId().equals(userId))
-            throw new RuntimeException("购物车项不存在");
+            throw AppException.notFound("购物车项不存在");
         item.setSelected(selected);
         this.updateById(item);
     }

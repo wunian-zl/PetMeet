@@ -162,6 +162,18 @@ mvn spring-boot:run
 
 如果数据库中已经存在`admin`账号，则只需配置`PETMEET_DB_PASSWORD`。
 
+本地开发时，如果希望只启动后端就自动启动Redis、用户端和管理端，可以额外开启开发辅助启动：
+
+```powershell
+cd PetMeet-backend
+$env:PETMEET_DB_PASSWORD="你的MySQL密码"
+$env:PETMEET_ADMIN_PASSWORD="管理员初始密码"
+$env:PETMEET_DEV_LAUNCH_ALL="true"
+mvn spring-boot:run
+```
+
+该开关默认关闭，仅建议本地开发使用。后端启动完成后会先执行`scripts/start-redis-if-needed.ps1`检查Redis，再通过`scripts/dev-frontends.mjs`启动两个Vite开发服务。后端退出时会尝试一并关闭前端开发进程。
+
 后端默认地址：
 
 ```text

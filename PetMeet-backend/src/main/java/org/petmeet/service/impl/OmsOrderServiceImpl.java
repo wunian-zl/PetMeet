@@ -1,5 +1,7 @@
 package org.petmeet.service.impl;
 
+import org.petmeet.common.AppException;
+
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
@@ -12,13 +14,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.petmeet.dto.OrderReviewDTO;
 import org.petmeet.dto.OrderSubmitDTO;
+import org.petmeet.dto.PayCreateDTO;
 import org.petmeet.entity.*;
+import org.petmeet.enums.PayStatusEnum;
 import org.petmeet.mapper.OmsAfterSaleMapper;
 import org.petmeet.mapper.OmsOrderItemMapper;
 import org.petmeet.mapper.OmsOrderMapper;
+import org.petmeet.mapper.OmsPayLogMapper;
 import org.petmeet.mapper.SysUserMapper;
 import org.petmeet.service.OmsCartItemService;
 import org.petmeet.service.OmsOrderService;
+import org.petmeet.service.PayService;
 import org.petmeet.service.PmsProductService;
 import org.petmeet.service.SysNotificationService;
 import org.petmeet.service.UmsAddressService;
@@ -41,11 +47,13 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
 
     private final OmsOrderItemMapper orderItemMapper;
     private final OmsAfterSaleMapper afterSaleMapper;
+    private final OmsPayLogMapper payLogMapper;
     private final OmsCartItemService cartItemService;
     private final PmsProductService productService;
     private final UmsAddressService addressService;
     private final SysNotificationService notificationService;
     private final SysUserMapper userMapper;
+    private final PayService payService;
 
     @Value("${app.order.pay-timeout-minutes:30}")
     private Integer payTimeoutMinutes;
@@ -63,13 +71,13 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
         cartWrapper.eq(OmsCartItem::getUserId, userId).in(OmsCartItem::getId, dto.getCartItemIds());
         List<OmsCartItem> cartItems = cartItemService.list(cartWrapper);
         if (cartItems.isEmpty()) {
-            throw new RuntimeException("Please select items to checkout");
+            throw AppException.badRequest("请选择要结算的商品");
         }
 
         // 校验收货地址是否属于当前用户
         UmsAddress address = addressService.getById(dto.getAddressId());
         if (address == null || !address.getUserId().equals(userId)) {
-            throw new RuntimeException("Address not found");
+            throw AppException.notFound("收货地址不存在");
         }
 
         // 批量查询商品信息
@@ -82,11 +90,11 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
         for (OmsCartItem cart : cartItems) {
             PmsProduct product = productMap.get(cart.getProductId());
             if (product == null) {
-                throw new RuntimeException("产品未找到");   }
-            if (product.getStatus() == null || product.getStatus() != 1) {
-                throw new RuntimeException("产品不打折: " + product.getName()); }
+                throw AppException.notFound("商品不存在");   }
+            if (product.getStatus() == null || product.getStatus() != PmsProduct.STATUS_ON_SHELF) {
+                throw AppException.badRequest("商品已下架:" + product.getName()); }
             if (product.getStock() == null || product.getStock() < cart.getQuantity()) {
-                throw new RuntimeException("库存不足: " + product.getName());}
+                throw AppException.badRequest("库存不足: " + product.getName());}
             boolean updated = productService.update(new LambdaUpdateWrapper<PmsProduct>()
                     .eq(PmsProduct::getId, product.getId())
                     .eq(PmsProduct::getVersion, product.getVersion())
@@ -94,7 +102,7 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
                     .setSql("stock = stock - " + cart.getQuantity())
                     .setSql("version = version + 1"));
             if (!updated) {
-                throw new RuntimeException("库存已更改，请重试: " + product.getName());  }
+                throw AppException.conflict("库存已变化,请重试:" + product.getName());  }
             BigDecimal price = product.getPrice();
             BigDecimal subtotal = price.multiply(BigDecimal.valueOf(cart.getQuantity()));
             totalAmount = totalAmount.add(subtotal);
@@ -126,13 +134,15 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
         order.setOrderSn(orderSn);
         order.setUserId(userId);
         order.setTotalAmount(totalAmount);
+        order.setRefundAmount(BigDecimal.ZERO);
         order.setStatus(OmsOrder.STATUS_PENDING_PAY);
         order.setReviewStatus(OmsOrder.REVIEW_PENDING);
         order.setReceiverInfo(JSON.toJSONString(receiverInfo));
         order.setReceiver(address.getName());
         order.setPhone(address.getPhone());
         order.setAddress(receiverInfo.get("address"));
-        order.setUserDeleted(0);
+        order.setRemark(StrUtil.trimToNull(dto.getRemark()));
+        order.setUserDeleted(OmsOrder.DELETE_VISIBLE);
         order.setCreateTime(LocalDateTime.now());
         this.save(order);
 
@@ -155,8 +165,9 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
         Long userId = StpUtil.getLoginIdAsLong();
         // 校验订单是否属于当前用户
         OmsOrder order = this.getById(orderId);
-        if (order == null || !order.getUserId().equals(userId) || Integer.valueOf(1).equals(order.getUserDeleted())) {
-            throw new RuntimeException("Order not found");
+        if (order == null || !order.getUserId().equals(userId)
+                || Integer.valueOf(OmsOrder.DELETE_DELETED).equals(order.getUserDeleted())) {
+            throw AppException.notFound("订单不存在");
         }
         // 转成前端需要的详情数据
         return convertToDetailVO(order);
@@ -171,7 +182,7 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
         // 按当前用户和筛选条件查询订单
         LambdaQueryWrapper<OmsOrder> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(OmsOrder::getUserId, userId);
-        wrapper.and(w -> w.isNull(OmsOrder::getUserDeleted).or().eq(OmsOrder::getUserDeleted, 0));
+        wrapper.and(w -> w.isNull(OmsOrder::getUserDeleted).or().eq(OmsOrder::getUserDeleted, OmsOrder.DELETE_VISIBLE));
         if (status != null) {
             wrapper.eq(OmsOrder::getStatus, status);
         }
@@ -195,29 +206,11 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void pay(Long orderId) {
-        Long userId = StpUtil.getLoginIdAsLong();
-        OmsOrder order = requireMyOrder(orderId, userId);
-        if (order.getStatus() == null || order.getStatus() != OmsOrder.STATUS_PENDING_PAY) {
-            throw new RuntimeException("Order status is invalid for payment");
-        }
-
-        // 支付成功后更新订单状态
-        order.setStatus(OmsOrder.STATUS_PAID);
-        order.setPayTime(LocalDateTime.now());
-        this.updateById(order);
-
-        // 同步累计商品销量
-        List<OmsOrderItem> items = orderItemMapper.selectList(
-                new LambdaQueryWrapper<OmsOrderItem>().eq(OmsOrderItem::getOrderId, orderId));
-        for (OmsOrderItem item : items) {
-            Integer qty = item.getQuantity() == null ? 0 : item.getQuantity();
-            if (qty <= 0 || item.getProductId() == null) {
-                continue;
-            }
-            productService.update(new LambdaUpdateWrapper<PmsProduct>()
-                    .eq(PmsProduct::getId, item.getProductId())
-                    .setSql("sales = sales + " + qty));
-        }
+        PayCreateDTO dto = new PayCreateDTO();
+        dto.setOrderId(orderId);
+        dto.setPayType("WECHAT_MOCK");
+        dto.setPayMode("QR_CODE");
+        payService.mockConfirm(payService.createPay(dto).getPaySn());
     }
 
     /**
@@ -231,7 +224,7 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
 
         Integer status = order.getStatus();
         if (status == null) {
-            throw new RuntimeException("Current order status does not support cancel");
+            throw AppException.conflict("当前订单状态不允许取消");
         }
 
         // 待付款订单直接关闭，并回滚库存。
@@ -242,8 +235,9 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
                     .eq(OmsOrder::getStatus, OmsOrder.STATUS_PENDING_PAY)
                     .set(OmsOrder::getStatus, OmsOrder.STATUS_CLOSED));
             if (!locked) {
-                throw new RuntimeException("Order status changed, please refresh and retry");
+                throw AppException.conflict("订单状态已变化,请刷新后重试");
             }
+            closePendingPayLogs(orderId, "订单已取消");
             rollbackStock(orderId);
             return;
         }
@@ -256,8 +250,9 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
                     .eq(OmsOrder::getStatus, OmsOrder.STATUS_PAID)
                     .set(OmsOrder::getStatus, OmsOrder.STATUS_REFUNDING));
             if (!locked) {
-                throw new RuntimeException("Order status changed, please refresh and retry");
+                throw AppException.conflict("订单状态已变化,请刷新后重试");
             }
+            closePendingPayLogs(orderId, "订单已进入退款处理中");
 
             ensureAutoRefundRequest(order, userId);
             notifyAdminsForRefundingOrder(order);
@@ -272,10 +267,10 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
         }
 
         if (status == OmsOrder.STATUS_REFUNDING) {
-            throw new RuntimeException("Refund is processing, do not submit repeatedly");
+            throw AppException.conflict("退款正在处理中,请勿重复提交");
         }
 
-        throw new RuntimeException("Current order status does not support cancel");
+        throw AppException.conflict("当前订单状态不允许取消");
     }
 
     /**
@@ -287,14 +282,19 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
         Long userId = StpUtil.getLoginIdAsLong();
         OmsOrder order = requireMyOrder(orderId, userId);
         if (order.getStatus() == null || order.getStatus() != OmsOrder.STATUS_SHIPPED) {
-            throw new RuntimeException("Current order status cannot confirm receipt");
+            throw AppException.conflict("当前订单状态不允许确认收货");
         }
 
-        order.setStatus(OmsOrder.STATUS_COMPLETED);
-        if (order.getReviewStatus() == null) {
-            order.setReviewStatus(OmsOrder.REVIEW_PENDING);
+        boolean confirmed = this.update(new LambdaUpdateWrapper<OmsOrder>()
+                .eq(OmsOrder::getId, orderId)
+                .eq(OmsOrder::getUserId, userId)
+                .eq(OmsOrder::getStatus, OmsOrder.STATUS_SHIPPED)
+                .set(OmsOrder::getStatus, OmsOrder.STATUS_COMPLETED)
+                .set(OmsOrder::getReviewStatus, order.getReviewStatus() == null
+                        ? OmsOrder.REVIEW_PENDING : order.getReviewStatus()));
+        if (!confirmed) {
+            throw AppException.conflict("订单状态已变化,请刷新后重试");
         }
-        this.updateById(order);
     }
 
     /**
@@ -306,20 +306,28 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
         Long userId = StpUtil.getLoginIdAsLong();
         OmsOrder order = requireMyOrder(orderId, userId);
         if (order.getStatus() == null || order.getStatus() != OmsOrder.STATUS_COMPLETED) {
-            throw new RuntimeException("Please confirm receipt first");
+            throw AppException.conflict("请先确认收货");
         }
 
         Integer current = order.getReviewStatus() == null ? OmsOrder.REVIEW_PENDING : order.getReviewStatus();
         if (current == OmsOrder.REVIEW_DONE) {
-            throw new RuntimeException("Order already reviewed");
+            throw AppException.conflict("订单已评价");
         }
 
-        // 保存本次评价信息
-        order.setReviewStatus(OmsOrder.REVIEW_DONE);
-        order.setReviewScore(dto.getScore());
-        order.setReviewContent(StrUtil.trimToNull(dto.getContent()));
-        order.setReviewTime(LocalDateTime.now());
-        this.updateById(order);
+        // 保存本次评价信息，状态锁避免重复评价。
+        boolean reviewed = this.update(new LambdaUpdateWrapper<OmsOrder>()
+                .eq(OmsOrder::getId, orderId)
+                .eq(OmsOrder::getUserId, userId)
+                .eq(OmsOrder::getStatus, OmsOrder.STATUS_COMPLETED)
+                .and(w -> w.isNull(OmsOrder::getReviewStatus)
+                        .or().eq(OmsOrder::getReviewStatus, OmsOrder.REVIEW_PENDING))
+                .set(OmsOrder::getReviewStatus, OmsOrder.REVIEW_DONE)
+                .set(OmsOrder::getReviewScore, dto.getScore())
+                .set(OmsOrder::getReviewContent, StrUtil.trimToNull(dto.getContent()))
+                .set(OmsOrder::getReviewTime, LocalDateTime.now()));
+        if (!reviewed) {
+            throw AppException.conflict("订单评价状态已变化,请刷新后重试");
+        }
     }
 
     /**
@@ -333,15 +341,21 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
 
         Integer current = order.getReviewStatus() == null ? OmsOrder.REVIEW_PENDING : order.getReviewStatus();
         if (current != OmsOrder.REVIEW_DONE) {
-            throw new RuntimeException("Review does not exist");
+            throw AppException.notFound("评价不存在");
         }
 
-        // 清空订单上的评价数据
-        order.setReviewStatus(OmsOrder.REVIEW_PENDING);
-        order.setReviewScore(null);
-        order.setReviewContent(null);
-        order.setReviewTime(null);
-        this.updateById(order);
+        // 清空订单上的评价数据，状态锁避免并发重复删除。
+        boolean deleted = this.update(new LambdaUpdateWrapper<OmsOrder>()
+                .eq(OmsOrder::getId, orderId)
+                .eq(OmsOrder::getUserId, userId)
+                .eq(OmsOrder::getReviewStatus, OmsOrder.REVIEW_DONE)
+                .set(OmsOrder::getReviewStatus, OmsOrder.REVIEW_PENDING)
+                .set(OmsOrder::getReviewScore, null)
+                .set(OmsOrder::getReviewContent, null)
+                .set(OmsOrder::getReviewTime, null));
+        if (!deleted) {
+            throw AppException.conflict("评价状态已变化,请刷新后重试");
+        }
     }
 
     /**
@@ -355,7 +369,7 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
 
         Integer status = order.getStatus();
         if (status == null || (status != OmsOrder.STATUS_COMPLETED && status != OmsOrder.STATUS_CLOSED)) {
-            throw new RuntimeException("仅已完成或已关闭的订单可删除");
+            throw AppException.badRequest("仅已完成或已关闭的订单可删除");
         }
 
         // 校验订单是否还有处理中售后
@@ -364,12 +378,20 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
                 .eq(OmsAfterSale::getUserId, userId)
                 .in(OmsAfterSale::getStatus, OmsAfterSale.STATUS_PENDING, OmsAfterSale.STATUS_PROCESSING));
         if (activeAfterSaleCount != null && activeAfterSaleCount > 0) {
-            throw new RuntimeException("订单存在处理中售后，暂不可删除");
+            throw AppException.badRequest("订单存在处理中售后，暂不可删除");
         }
 
         // 逻辑删除订单，前端不再展示
-        order.setUserDeleted(1);
-        this.updateById(order);
+        boolean deleted = this.update(new LambdaUpdateWrapper<OmsOrder>()
+                .eq(OmsOrder::getId, orderId)
+                .eq(OmsOrder::getUserId, userId)
+                .and(w -> w.isNull(OmsOrder::getUserDeleted)
+                        .or().eq(OmsOrder::getUserDeleted, OmsOrder.DELETE_VISIBLE))
+                .in(OmsOrder::getStatus, OmsOrder.STATUS_COMPLETED, OmsOrder.STATUS_CLOSED)
+                .set(OmsOrder::getUserDeleted, OmsOrder.DELETE_DELETED));
+        if (!deleted) {
+            throw AppException.conflict("订单状态已变化,请刷新后重试");
+        }
     }
 
     /**
@@ -416,6 +438,7 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
                 continue;
             }
             // 关闭订单后回滚库存并通知用户
+            closePendingPayLogs(order.getId(), "订单超时关闭");
             rollbackStock(order.getId());
             closedCount++;
             notificationService.sendToUser(
@@ -444,6 +467,8 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
         vo.setReviewContent(order.getReviewContent());
         vo.setReviewTime(order.getReviewTime());
         vo.setPayTime(order.getPayTime());
+        vo.setPayType(getPayTypeDesc(order.getPayType()));
+        vo.setPaySn(order.getPaySn());
         vo.setCreateTime(order.getCreateTime());
         vo.setShipCompany(order.getShipCompany());
         vo.setTrackingNo(order.getTrackingNo());
@@ -509,6 +534,21 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
     }
 
     /**
+     * 关闭订单关联的待支付流水，避免订单关闭后旧二维码继续悬挂。
+     */
+    private void closePendingPayLogs(Long orderId, String reason) {
+        if (orderId == null) {
+            return;
+        }
+        payLogMapper.update(null, new LambdaUpdateWrapper<OmsPayLog>()
+                .eq(OmsPayLog::getOrderId, orderId)
+                .eq(OmsPayLog::getPayStatus, PayStatusEnum.PENDING.getCode())
+                .set(OmsPayLog::getPayStatus, PayStatusEnum.CLOSED.getCode())
+                .set(OmsPayLog::getErrorMsg, StrUtil.blankToDefault(reason, "订单已关闭"))
+                .set(OmsPayLog::getUpdateTime, LocalDateTime.now()));
+    }
+
+    /**
      * 自动创建退款申请
      */
     private void ensureAutoRefundRequest(OmsOrder order, Long userId) {
@@ -516,7 +556,7 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
         List<OmsOrderItem> items = orderItemMapper.selectList(
                 new LambdaQueryWrapper<OmsOrderItem>().eq(OmsOrderItem::getOrderId, order.getId()));
         if (items == null || items.isEmpty()) {
-            throw new RuntimeException("Order items not found");
+            throw AppException.notFound("订单商品不存在");
         }
 
         for (OmsOrderItem item : items) {
@@ -553,8 +593,8 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
         // 查询所有启用中的管理员账号
         List<SysUser> admins = userMapper.selectList(new LambdaQueryWrapper<SysUser>()
                 .select(SysUser::getId)
-                .eq(SysUser::getRole, "admin")
-                .eq(SysUser::getStatus, 1));
+                .eq(SysUser::getRole, SysUser.ROLE_ADMIN)
+                .eq(SysUser::getStatus, SysUser.STATUS_ENABLED));
         if (admins == null || admins.isEmpty()) {
             return;
         }
@@ -578,8 +618,9 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
      */
     private OmsOrder requireMyOrder(Long orderId, Long userId) {
         OmsOrder order = this.getById(orderId);
-        if (order == null || !order.getUserId().equals(userId) || Integer.valueOf(1).equals(order.getUserDeleted())) {
-            throw new RuntimeException("Order not found");
+        if (order == null || !order.getUserId().equals(userId)
+                || Integer.valueOf(OmsOrder.DELETE_DELETED).equals(order.getUserDeleted())) {
+            throw AppException.notFound("订单不存在");
         }
         return order;
     }
@@ -589,19 +630,30 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
      */
     private String getStatusDesc(OmsOrder order) {
         if (order == null || order.getStatus() == null) {
-            return "Unknown";
+            return "未知";
         }
         return switch (order.getStatus()) {
-            case OmsOrder.STATUS_PENDING_PAY -> "Pending payment";
-            case OmsOrder.STATUS_PAID -> "Pending shipment";
-            case OmsOrder.STATUS_SHIPPED -> "Pending receipt";
+            case OmsOrder.STATUS_PENDING_PAY -> "待付款";
+            case OmsOrder.STATUS_PAID -> "待发货";
+            case OmsOrder.STATUS_SHIPPED -> "待收货";
             case OmsOrder.STATUS_COMPLETED -> {
                 Integer rs = order.getReviewStatus() == null ? OmsOrder.REVIEW_PENDING : order.getReviewStatus();
-                yield rs == OmsOrder.REVIEW_PENDING ? "Pending review" : "Completed";
+                yield rs == OmsOrder.REVIEW_PENDING ? "待评价" : "已完成";
             }
-            case OmsOrder.STATUS_CLOSED -> "Closed";
-            case OmsOrder.STATUS_REFUNDING -> "Refunding";
-            default -> "Unknown";
+            case OmsOrder.STATUS_CLOSED -> "已关闭";
+            case OmsOrder.STATUS_REFUNDING -> "退款中";
+            default -> "未知";
+        };
+    }
+
+    private String getPayTypeDesc(Integer payType) {
+        if (payType == null) {
+            return null;
+        }
+        return switch (payType) {
+            case 1 -> "支付宝";
+            case 2 -> "微信支付";
+            default -> "未知";
         };
     }
 }

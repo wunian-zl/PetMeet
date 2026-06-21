@@ -1,5 +1,7 @@
 package org.petmeet.service.impl;
 
+import org.petmeet.common.AppException;
+
 import cn.dev33.satoken.secure.BCrypt;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.bean.BeanUtil;
@@ -78,7 +80,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         // 查询用户详情
         SysUser user = sysUserMapper.selectById(id);
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw AppException.notFound("用户不存在");
         }
         return toVO(user);
     }
@@ -92,26 +94,26 @@ public class AdminUserServiceImpl implements AdminUserService {
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysUser::getUsername, user.getUsername());
         if (sysUserMapper.selectCount(wrapper) > 0) {
-            throw new RuntimeException("用户名已存在");
+            throw AppException.badRequest("用户名已存在");
         }
 
         // 管理员新增用户时必须显式提供符合要求的初始密码。
         String initialPassword = user.getPassword();
         if (StrUtil.isBlank(initialPassword)) {
-            throw new RuntimeException("初始密码不能为空");
+            throw AppException.badRequest("初始密码不能为空");
         }
         if (initialPassword.length() < 8
                 || initialPassword.length() > 64
                 || !initialPassword.matches(".*[A-Za-z].*")
                 || !initialPassword.matches(".*\\d.*")) {
-            throw new RuntimeException("初始密码必须为8-64位，且同时包含字母和数字");
+            throw AppException.badRequest("初始密码必须为8-64位，且同时包含字母和数字");
         }
         user.setPassword(BCrypt.hashpw(initialPassword));
         if (user.getRole() == null) {
             user.setRole("user");
         }
         if (user.getStatus() == null) {
-            user.setStatus(1);
+            user.setStatus(SysUser.STATUS_ENABLED);
         }
         user.setCreateTime(LocalDateTime.now());
 
@@ -127,7 +129,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         // 查询原用户
         SysUser existing = sysUserMapper.selectById(user.getId());
         if (existing == null) {
-            throw new RuntimeException("用户不存在");
+            throw AppException.notFound("用户不存在");
         }
 
         // 不允许修改密码(使用重置密码接口)
@@ -156,10 +158,10 @@ public class AdminUserServiceImpl implements AdminUserService {
     public void banUser(Long id, String reason) {
         SysUser user = sysUserMapper.selectById(id);
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw AppException.notFound("用户不存在");
         }
 
-        user.setStatus(0);
+        user.setStatus(SysUser.STATUS_DISABLED);
         user.setBanReason(reason);
         user.setBanTime(LocalDateTime.now());
         sysUserMapper.updateById(user);
@@ -172,10 +174,10 @@ public class AdminUserServiceImpl implements AdminUserService {
     public void unbanUser(Long id) {
         SysUser user = sysUserMapper.selectById(id);
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw AppException.notFound("用户不存在");
         }
 
-        user.setStatus(1);
+        user.setStatus(SysUser.STATUS_ENABLED);
         user.setBanReason(null);
         user.setBanTime(null);
         sysUserMapper.updateById(user);
@@ -188,11 +190,11 @@ public class AdminUserServiceImpl implements AdminUserService {
     public void deleteUser(Long id) {
         SysUser user = sysUserMapper.selectById(id);
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw AppException.notFound("用户不存在");
         }
         // 不允许删除管理员
         if ("admin".equals(user.getRole())) {
-            throw new RuntimeException("不能删除管理员账户");
+            throw AppException.badRequest("不能删除管理员账户");
         }
         sysUserMapper.deleteById(id);
     }
@@ -204,7 +206,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     public String resetPassword(Long id) {
         SysUser user = sysUserMapper.selectById(id);
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw AppException.notFound("用户不存在");
         }
 
         // 生成随机密码
@@ -222,7 +224,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     public void forceLogout(Long id) {
         SysUser user = sysUserMapper.selectById(id);
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw AppException.notFound("用户不存在");
         }
         StpUtil.kickout(id);
     }
@@ -234,7 +236,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     public void harmonizeAvatar(Long id) {
         SysUser user = sysUserMapper.selectById(id);
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw AppException.notFound("用户不存在");
         }
 
         // MyBatis-Plus 默认会忽略 updateById() 里的 null 值。

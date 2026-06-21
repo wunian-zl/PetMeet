@@ -1,0 +1,10 @@
+<svg width="208" height="56" viewBox="0 0 208 56" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title">
+  <title id="title">PetMeet</title>
+  <rect x="4" y="4" width="48" height="48" rx="16" fill="#FFF4F6"/>
+  <path d="M16 27.5C16 19.8 22.1 14.5 29.7 14.5C37.6 14.5 43.5 20.1 43.5 27.3C43.5 34.5 37.7 40 30.1 40H26.4L19.8 43.8L21.4 37.9C18.1 35.5 16 31.8 16 27.5Z" stroke="#FF6B81" stroke-width="3.2" stroke-linejoin="round"/>
+  <circle cx="24.2" cy="26.1" r="2.2" fill="#FF6B81"/>
+  <circle cx="31.8" cy="26.1" r="2.2" fill="#FF6B81"/>
+  <circle cx="28" cy="22.7" r="2" fill="#FF6B81"/>
+  <path d="M23.8 32.3C23.8 29.9 25.6 28.1 28 28.1C30.4 28.1 32.2 29.9 32.2 32.3C32.2 34 30.7 34.7 28 34.7C25.3 34.7 23.8 34 23.8 32.3Z" fill="#FF6B81"/>
+  <text x="66" y="36" fill="#2F3239" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="28" font-weight="760" letter-spacing="0">PetMeet</text>
+</svg>

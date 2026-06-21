@@ -18,7 +18,7 @@ public class AfterSaleSchemaInitializer implements CommandLineRunner {
         try {
             ensureAfterSaleSchema();
         } catch (Exception e) {
-            log.error("Failed to ensure oms_after_sale schema for delete flags", e);
+            log.error("初始化oms_after_sale删除标记字段失败", e);
         }
     }
 
@@ -58,7 +58,7 @@ public class AfterSaleSchemaInitializer implements CommandLineRunner {
         }
         String sql = "ALTER TABLE `" + tableName + "` ADD COLUMN `" + columnName + "` " + definitionSql;
         jdbcTemplate.execute(sql);
-        log.info("Added column {}.{}", tableName, columnName);
+        log.info("已补充字段{}.{}", tableName, columnName);
     }
 
     private boolean columnExists(String tableName, String columnName) {

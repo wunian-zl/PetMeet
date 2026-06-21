@@ -31,7 +31,7 @@ public class ComplaintController {
     public Result<Long> submit(@Valid @RequestBody ComplaintDTO dto) {
         // 调用业务层提交投诉
         Long id = complaintService.submitComplaint(dto);
-        return Result.success("Submitted", id);
+        return Result.success("提交成功", id);
     }
 
     /**
@@ -75,7 +75,7 @@ public class ComplaintController {
     public Result<Void> deleteMy(@PathVariable Long id) {
         // 调用业务层删除当前用户投诉
         complaintService.deleteMyComplaint(id);
-        return Result.success("Deleted", null);
+        return Result.success("删除成功", null);
     }
 
     /**
@@ -86,6 +86,6 @@ public class ComplaintController {
     public Result<Void> feedback(@PathVariable Long id, @Valid @RequestBody ComplaintFeedbackDTO dto) {
         // 调用业务层提交投诉反馈
         complaintService.feedback(id, dto);
-        return Result.success("OK", null);
+        return Result.success("操作成功", null);
     }
 }

@@ -13,9 +13,9 @@ public class ComplaintFeedbackDTO {
     /**
      * 1 表示满意，2 表示不满意。
      */
-    @NotNull(message = "feedbackStatus is required")
-    @Min(value = 1, message = "feedbackStatus must be 1 or 2")
-    @Max(value = 2, message = "feedbackStatus must be 1 or 2")
+    @NotNull(message = "反馈状态不能为空")
+    @Min(value = 1, message = "反馈状态只能为1或2")
+    @Max(value = 2, message = "反馈状态只能为1或2")
     @Schema(description = "1=satisfied,2=unsatisfied", example = "1")
     private Integer feedbackStatus;
 

@@ -560,15 +560,30 @@
 
           <div v-else class="comment-list">
             <div v-for="comment in comments" :key="comment.id" class="comment-item">
-              <el-avatar :size="28" :src="resolveImageUrl(comment.userAvatar)" class="comment-avatar" />
+              <el-avatar v-if="!comment.deleted" :size="28" :src="resolveImageUrl(comment.userAvatar)" class="comment-avatar" />
               <div class="comment-body">
+                <div v-if="comment.deleted" class="comment-deleted">评论已删除</div>
+                <template v-else>
                 <div class="comment-meta">
                   <span class="comment-user">{{ comment.userNickname }}</span>
+                  <el-tag v-if="comment.author" size="small" effect="plain">作者</el-tag>
                   <span class="comment-time">{{ formatDateTime(comment.createTime) }}</span>
                 </div>
                 <div class="comment-text">{{ comment.content }}</div>
+                </template>
+                <div v-if="comment.replies && comment.replies.length" class="comment-replies">
+                  <div v-for="reply in comment.replies" :key="reply.id" class="comment-reply">
+                    <span class="comment-user">{{ reply.userNickname }}</span>
+                    <el-tag v-if="reply.author" size="small" effect="plain">作者</el-tag>
+                    <span v-if="reply.replyToNickname" class="reply-target">回复 @{{ reply.replyToNickname }}：</span>
+                    <span>{{ reply.content }}</span>
+                  </div>
+                  <div v-if="comment.replyCount > comment.replies.length" class="reply-more-tip">
+                    还有 {{ comment.replyCount - comment.replies.length }} 条回复
+                  </div>
+                </div>
               </div>
-              <el-button type="danger" link size="small" @click="handleDeleteComment(comment)">删除</el-button>
+              <el-button v-if="!comment.deleted" type="danger" link size="small" @click="handleDeleteComment(comment)">删除</el-button>
             </div>
           </div>
 
@@ -681,18 +696,20 @@ const currentNote = ref(null)
 const comments = ref([])
 const commentPage = ref(1)
 const commentTotal = ref(0)
+const commentThreadTotal = ref(0)
 const commentMode = ref('preview') // preview -> show a few, full -> paged 20
 const commentPreviewSize = 3
 const commentFullSize = 20
 const commentPageSize = computed(() => (commentMode.value === 'preview' ? commentPreviewSize : commentFullSize))
 const commentLoading = ref(false)
-const commentHasMore = computed(() => comments.value.length < commentTotal.value)
+const commentHasMore = computed(() => comments.value.length < commentThreadTotal.value)
 const commentLoadLabel = computed(() => (commentMode.value === 'preview' ? '展开更多' : '加载更多'))
 
 const resetCommentState = () => {
   comments.value = []
   commentPage.value = 1
   commentTotal.value = 0
+  commentThreadTotal.value = 0
   commentLoading.value = false
   commentMode.value = 'preview'
 }
@@ -717,7 +734,7 @@ const fetchComments = async (reset = false) => {
     })
     if (res.code === 200 && res.data) {
       const records = res.data.records || []
-      commentTotal.value = res.data.total || records.length
+      commentThreadTotal.value = res.data.total || records.length
       if (reset) {
         comments.value = records
       } else {
@@ -758,7 +775,15 @@ const handleDeleteComment = (comment) => {
       ElMessage.error(res.message || res.msg || '删除评论失败')
       return
     }
-    comments.value = comments.value.filter(item => item.id !== comment.id)
+    if (comment.replyCount > 0) {
+      comment.deleted = true
+      comment.content = ''
+      comment.userNickname = ''
+      comment.userAvatar = ''
+    } else {
+      comments.value = comments.value.filter(item => item.id !== comment.id)
+      commentThreadTotal.value = Math.max(0, commentThreadTotal.value - 1)
+    }
     commentTotal.value = Math.max(0, commentTotal.value - 1)
     if (currentNote.value) {
       currentNote.value.commentCount = Math.max(0, (currentNote.value.commentCount || 0) - 1)
@@ -1759,7 +1784,8 @@ const handleSoftDelete = (row) => {
 }
 .comment-meta {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   color: #909399;
   margin-bottom: 4px;
@@ -1772,6 +1798,28 @@ const handleSoftDelete = (row) => {
   font-size: 14px;
   color: #606266;
   white-space: pre-wrap;
+}
+.comment-deleted {
+  color: #a8abb2;
+  font-size: 13px;
+  line-height: 24px;
+}
+.comment-replies {
+  margin-top: 8px;
+  padding-left: 10px;
+  border-left: 2px solid #ebeef5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.comment-reply {
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.5;
+}
+.reply-target,
+.reply-more-tip {
+  color: #909399;
 }
 .comments-loading,
 .comments-empty {

@@ -5,21 +5,32 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
-@Schema(description = "Note complaint request")
+@Schema(description = "Complaint request")
 public class ComplaintDTO {
 
-    @NotNull(message = "noteId is required")
+    @NotNull(message = "笔记ID不能为空")
     @Schema(description = "Note id")
     private Long noteId;
 
-    @Schema(description = "Parent complaint id (for re-complaint)")
+    @Schema(description = "Target type: note/comment")
+    private String targetType;
+
+    @Schema(description = "Comment id when targetType=comment")
+    private Long commentId;
+
+    @Schema(description = "Parent complaint id for re-complaint")
     private Long parentId;
 
-    @NotBlank(message = "reason is required")
-    @Schema(description = "Reason", example = "侵权")
+    @NotBlank(message = "原因不能为空")
+    @Schema(description = "Reason")
     private String reason;
 
     @Schema(description = "Detail")
     private String content;
+
+    @Schema(description = "Evidence image urls")
+    private List<String> evidenceImages;
 }

@@ -23,6 +23,8 @@ public class OrderDetailVO {
     private String receiverPhone;
     private String receiverAddress;
     private LocalDateTime payTime;
+    private String payType;
+    private String paySn;
     private LocalDateTime createTime;
     /**
      * 待付款订单的支付截止时间（createTime + 超时时间窗口）。

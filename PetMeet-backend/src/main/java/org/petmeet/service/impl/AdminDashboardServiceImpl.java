@@ -92,7 +92,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         // 待发货订单数
         Long pendingShipCount = omsOrderMapper.selectCount(
-                new LambdaQueryWrapper<OmsOrder>().eq(OmsOrder::getStatus, 1));
+                new LambdaQueryWrapper<OmsOrder>().eq(OmsOrder::getStatus, OmsOrder.STATUS_PAID));
         stats.setPendingShipCount(pendingShipCount.intValue());
 
         return stats;
@@ -296,7 +296,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         // 待发货订单
         Long pendingOrders = omsOrderMapper.selectCount(
-                new LambdaQueryWrapper<OmsOrder>().eq(OmsOrder::getStatus, 1));
+                new LambdaQueryWrapper<OmsOrder>().eq(OmsOrder::getStatus, OmsOrder.STATUS_PAID));
         if (pendingOrders > 0) {
             DashboardTodoVO todo = new DashboardTodoVO();
             todo.setId(2L);
@@ -345,7 +345,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         // 低库存商品
         Long lowStockProducts = pmsProductMapper.selectCount(
                 new LambdaQueryWrapper<PmsProduct>()
-                        .eq(PmsProduct::getStatus, 1)
+                        .eq(PmsProduct::getStatus, PmsProduct.STATUS_ON_SHELF)
                         .and(w -> w
                                 .nested(w1 -> w1.isNull(PmsProduct::getWarningStock).le(PmsProduct::getStock, 10))
                                 .or(w1 -> w1.isNotNull(PmsProduct::getWarningStock).apply("stock <= warning_stock"))

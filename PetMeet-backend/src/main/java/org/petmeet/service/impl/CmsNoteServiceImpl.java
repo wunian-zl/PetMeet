@@ -1,5 +1,7 @@
 package org.petmeet.service.impl;
 
+import org.petmeet.common.AppException;
+
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
@@ -92,7 +94,7 @@ public class CmsNoteServiceImpl extends ServiceImpl<CmsNoteMapper, CmsNote> impl
         }
         String type = StrUtil.blankToDefault(dto.getType(), "image").trim();
         if (!"image".equalsIgnoreCase(type) && !"video".equalsIgnoreCase(type)) {
-            throw new RuntimeException("不支持的笔记类型: " + type);
+            throw AppException.badRequest("不支持的笔记类型: " + type);
         }
         note.setType(type.toLowerCase());
 
@@ -135,20 +137,20 @@ public class CmsNoteServiceImpl extends ServiceImpl<CmsNoteMapper, CmsNote> impl
     public NoteDetailVO getDetail(Long noteId) {
         CmsNote note = this.getById(noteId);
         if (note == null)
-            throw new RuntimeException("笔记不存在");
+            throw AppException.notFound("笔记不存在");
 
         // 未发布内容只允许作者自己查看
         Integer status = note.getStatus();
         if (status != null && status != CmsNote.STATUS_PUBLISHED) {
             if (CmsNote.STATUS_USER_DELETED == status || CmsNote.STATUS_ADMIN_SOFT_DELETED == status) {
-                throw new RuntimeException("笔记已删除");
+                throw AppException.badRequest("笔记已删除");
             }
             if (!StpUtil.isLogin()) {
-                throw new RuntimeException(inaccessibleMessageByStatus(status));
+                throw AppException.badRequest(inaccessibleMessageByStatus(status));
             }
             Long userId = StpUtil.getLoginIdAsLong();
             if (!userId.equals(note.getUserId())) {
-                throw new RuntimeException(inaccessibleMessageByStatus(status));
+                throw AppException.badRequest(inaccessibleMessageByStatus(status));
             }
         }
 
@@ -178,7 +180,9 @@ public class CmsNoteServiceImpl extends ServiceImpl<CmsNoteMapper, CmsNote> impl
         }).collect(Collectors.toList()));
 
         Integer commentCount = commentMapper.selectCount(
-                new LambdaQueryWrapper<CmsComment>().eq(CmsComment::getNoteId, noteId))
+                new LambdaQueryWrapper<CmsComment>()
+                        .eq(CmsComment::getNoteId, noteId)
+                        .eq(CmsComment::getStatus, CmsComment.STATUS_NORMAL))
                 .intValue();
         vo.setCommentCount(commentCount);
 
@@ -239,7 +243,11 @@ public class CmsNoteServiceImpl extends ServiceImpl<CmsNoteMapper, CmsNote> impl
         if (productId != null) {
             List<Long> noteIds = relationMapper.selectNoteIdsByProductId(productId);
             if (noteIds == null || noteIds.isEmpty()) {
-                return new Page<>(pageNum, pageSize, 0);
+                Page<NoteListVO> emptyPage = new Page<>(pageNum, pageSize, 0);
+                noteRedisSupport.setNoteListPageCache(
+                        cacheKey,
+                        NoteListPageCacheDTO.of(emptyPage.getCurrent(), emptyPage.getSize(), emptyPage.getTotal(), emptyPage.getRecords()));
+                return emptyPage;
             }
             wrapper.in(CmsNote::getId, noteIds);
         }
@@ -360,7 +368,7 @@ public class CmsNoteServiceImpl extends ServiceImpl<CmsNoteMapper, CmsNote> impl
     public boolean toggleRecommend(Long noteId) {
         CmsNote note = this.getById(noteId);
         if (note == null)
-            throw new RuntimeException("笔记不存在");
+            throw AppException.notFound("笔记不存在");
 
         // 切换推荐状态
         boolean current = Boolean.TRUE.equals(note.getIsRecommended());
@@ -413,27 +421,27 @@ public class CmsNoteServiceImpl extends ServiceImpl<CmsNoteMapper, CmsNote> impl
         Long userId = StpUtil.getLoginIdAsLong();
         CmsNote note = this.getById(noteId);
         if (note == null) {
-            throw new RuntimeException("笔记不存在");
+            throw AppException.notFound("笔记不存在");
         }
         if (!userId.equals(note.getUserId())) {
-            throw new RuntimeException("只能操作自己的笔记");
+            throw AppException.forbidden("只能操作自己的笔记");
         }
 
         Integer status = note.getStatus();
         if (status == null) {
-            throw new RuntimeException("笔记状态异常");
+            throw AppException.badRequest("笔记状态异常");
         }
         if (CmsNote.STATUS_USER_DELETED == status || CmsNote.STATUS_ADMIN_SOFT_DELETED == status) {
-            throw new RuntimeException("笔记已删除，无法操作");
+            throw AppException.badRequest("笔记已删除，无法操作");
         }
         if (CmsNote.STATUS_SHIELDED == status) {
-            throw new RuntimeException("该笔记已被管理员下架，无法自行恢复");
+            throw AppException.badRequest("该笔记已被管理员下架，无法自行恢复");
         }
         if (CmsNote.STATUS_PENDING == status || CmsNote.STATUS_REJECTED == status) {
-            throw new RuntimeException("当前状态不支持下架/恢复");
+            throw AppException.badRequest("当前状态不支持下架/恢复");
         }
         if (CmsNote.STATUS_PUBLISHED != status && CmsNote.STATUS_USER_OFF_SHELF != status) {
-            throw new RuntimeException("当前状态不支持下架/恢复");
+            throw AppException.badRequest("当前状态不支持下架/恢复");
         }
 
         boolean toOffShelf = CmsNote.STATUS_PUBLISHED == status;
@@ -457,13 +465,13 @@ public class CmsNoteServiceImpl extends ServiceImpl<CmsNoteMapper, CmsNote> impl
         Long userId = StpUtil.getLoginIdAsLong();
         CmsNote note = this.getById(noteId);
         if (note == null) {
-            throw new RuntimeException("笔记不存在");
+            throw AppException.notFound("笔记不存在");
         }
         if (!userId.equals(note.getUserId())) {
-            throw new RuntimeException("只能删除自己的笔记");
+            throw AppException.forbidden("只能删除自己的笔记");
         }
         if (CmsNote.STATUS_ADMIN_SOFT_DELETED == note.getStatus() || CmsNote.STATUS_USER_DELETED == note.getStatus()) {
-            throw new RuntimeException("笔记已删除");
+            throw AppException.badRequest("笔记已删除");
         }
 
         // 逻辑删除笔记，并清掉运营状态
@@ -505,12 +513,18 @@ public class CmsNoteServiceImpl extends ServiceImpl<CmsNoteMapper, CmsNote> impl
             }
 
             String countStr = redisTemplate.opsForValue().get(NOTE_LIKE_COUNT_KEY + noteId);
+            if (StrUtil.isBlank(countStr)) {
+                continue;
+            }
             if (StrUtil.isNotBlank(countStr)) {
                 try {
-                    this.lambdaUpdate()
+                    boolean updated = this.lambdaUpdate()
                             .eq(CmsNote::getId, noteId)
                             .set(CmsNote::getLikeCount, Integer.parseInt(countStr.trim()))
                             .update();
+                    if (!updated) {
+                        continue;
+                    }
                 } catch (Exception e) {
                     log.debug("sync likeCount to db failed: noteId={}", noteId, e);
                     continue;

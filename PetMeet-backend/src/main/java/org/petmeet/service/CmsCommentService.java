@@ -9,7 +9,11 @@ import org.petmeet.vo.CommentVO;
 public interface CmsCommentService extends IService<CmsComment> {
     Page<CommentVO> pageList(Long noteId, Integer pageNum, Integer pageSize);
 
+    Page<CommentVO> pageReplies(Long parentId, Integer pageNum, Integer pageSize);
+
     Long addComment(CommentCreateDTO dto);
 
     void deleteComment(Long id);
+
+    Boolean toggleLike(Long id);
 }

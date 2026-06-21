@@ -1,5 +1,7 @@
 package org.petmeet.service.impl;
 
+import org.petmeet.common.AppException;
+
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson2.JSON;
@@ -43,25 +45,25 @@ public class OmsAfterSaleServiceImpl extends ServiceImpl<OmsAfterSaleMapper, Oms
         // 查询订单并校验归属
         OmsOrder order = orderMapper.selectById(dto.getOrderId());
         if (order == null || !Objects.equals(order.getUserId(), userId)) {
-            throw new RuntimeException("未找到订单"); }
+            throw AppException.notFound("未找到订单"); }
         if (order.getStatus() == null
                 || order.getStatus() == OmsOrder.STATUS_PENDING_PAY
                 || order.getStatus() == OmsOrder.STATUS_CLOSED
                 || order.getStatus() == OmsOrder.STATUS_REFUNDING) {
-            throw new RuntimeException("当前订单状态不允许售后");}
+            throw AppException.badRequest("当前订单状态不允许售后");}
         OmsOrderItem item = orderItemMapper.selectById(dto.getOrderItemId());
         if (item == null || !Objects.equals(item.getOrderId(), order.getId())) {
-            throw new RuntimeException("未找到订单项"); }
+            throw AppException.notFound("未找到订单项"); }
         Integer type = dto.getType();
         if (type == null || (type != 0 && type != 1 && type != 2)) {
-            throw new RuntimeException("售后类型无效");  }
+            throw AppException.badRequest("售后类型无效");  }
         Long activeCount = afterSaleMapper.selectCount(new LambdaQueryWrapper<OmsAfterSale>()
                 .eq(OmsAfterSale::getUserId, userId)
                 .eq(OmsAfterSale::getOrderItemId, dto.getOrderItemId())
                 .in(OmsAfterSale::getStatus, OmsAfterSale.STATUS_PENDING,
                         OmsAfterSale.STATUS_PROCESSING));
         if (activeCount != null && activeCount > 0) {
-            throw new RuntimeException("此商品已存在有效的售后请求"); }
+            throw AppException.badRequest("此商品已存在有效的售后请求"); }
         // 保存售后申请
         OmsAfterSale afterSale = new OmsAfterSale(); afterSale.setOrderId(order.getId());
         afterSale.setOrderItemId(item.getId()); afterSale.setUserId(userId);
@@ -87,7 +89,7 @@ public class OmsAfterSaleServiceImpl extends ServiceImpl<OmsAfterSaleMapper, Oms
         Page<OmsAfterSale> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<OmsAfterSale> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(OmsAfterSale::getUserId, userId);
-        wrapper.and(w -> w.isNull(OmsAfterSale::getUserDeleted).or().eq(OmsAfterSale::getUserDeleted, 0));
+        wrapper.and(w -> w.isNull(OmsAfterSale::getUserDeleted).or().eq(OmsAfterSale::getUserDeleted, OmsAfterSale.DELETE_VISIBLE));
         if (status != null) {
             wrapper.eq(OmsAfterSale::getStatus, status);
         }
@@ -156,21 +158,29 @@ public class OmsAfterSaleServiceImpl extends ServiceImpl<OmsAfterSaleMapper, Oms
     public void cancel(Long id) {
         Long userId = StpUtil.getLoginIdAsLong();
         OmsAfterSale afterSale = afterSaleMapper.selectById(id);
-        if (afterSale == null || Integer.valueOf(1).equals(afterSale.getUserDeleted())) {
-            throw new RuntimeException("After-sale request not found");
+        if (afterSale == null || Integer.valueOf(OmsAfterSale.DELETE_DELETED).equals(afterSale.getUserDeleted())) {
+            throw AppException.notFound("售后请求不存在");
         }
         if (!Objects.equals(afterSale.getUserId(), userId)) {
-            throw new RuntimeException("No permission");
+            throw AppException.forbidden("无权操作该售后请求");
         }
         if (afterSale.getStatus() == null
                 || (afterSale.getStatus() != OmsAfterSale.STATUS_PENDING
                 && afterSale.getStatus() != OmsAfterSale.STATUS_PROCESSING)) {
-            throw new RuntimeException("Current status does not support cancel");
+            throw AppException.conflict("当前售后状态不允许取消");
         }
-        afterSale.setStatus(OmsAfterSale.STATUS_CANCELED);
-        afterSale.setHandleRemark("用户已取消售后申请");
-        afterSale.setHandleTime(LocalDateTime.now());
-        afterSaleMapper.updateById(afterSale);
+        int updated = afterSaleMapper.update(null, new LambdaUpdateWrapper<OmsAfterSale>()
+                .eq(OmsAfterSale::getId, id)
+                .eq(OmsAfterSale::getUserId, userId)
+                .and(w -> w.isNull(OmsAfterSale::getUserDeleted)
+                        .or().eq(OmsAfterSale::getUserDeleted, OmsAfterSale.DELETE_VISIBLE))
+                .in(OmsAfterSale::getStatus, OmsAfterSale.STATUS_PENDING, OmsAfterSale.STATUS_PROCESSING)
+                .set(OmsAfterSale::getStatus, OmsAfterSale.STATUS_CANCELED)
+                .set(OmsAfterSale::getHandleRemark, "用户已取消售后申请")
+                .set(OmsAfterSale::getHandleTime, LocalDateTime.now()));
+        if (updated <= 0) {
+            throw AppException.conflict("售后状态已变化,请刷新后重试");
+        }
     }
 
     /**
@@ -180,21 +190,29 @@ public class OmsAfterSaleServiceImpl extends ServiceImpl<OmsAfterSaleMapper, Oms
     public void complete(Long id) {
         Long userId = StpUtil.getLoginIdAsLong();
         OmsAfterSale afterSale = afterSaleMapper.selectById(id);
-        if (afterSale == null || Integer.valueOf(1).equals(afterSale.getUserDeleted())) {
-            throw new RuntimeException("After-sale request not found");
+        if (afterSale == null || Integer.valueOf(OmsAfterSale.DELETE_DELETED).equals(afterSale.getUserDeleted())) {
+            throw AppException.notFound("售后请求不存在");
         }
         if (!Objects.equals(afterSale.getUserId(), userId)) {
-            throw new RuntimeException("No permission");
+            throw AppException.forbidden("无权操作该售后请求");
         }
         if (afterSale.getStatus() == null
                 || (afterSale.getStatus() != OmsAfterSale.STATUS_PENDING
                 && afterSale.getStatus() != OmsAfterSale.STATUS_PROCESSING)) {
-            throw new RuntimeException("Current status does not support complete");
+            throw AppException.conflict("当前售后状态不允许确认完成");
         }
-        afterSale.setStatus(OmsAfterSale.STATUS_COMPLETED);
-        afterSale.setHandleRemark("用户已确认售后完成");
-        afterSale.setHandleTime(LocalDateTime.now());
-        afterSaleMapper.updateById(afterSale);
+        int updated = afterSaleMapper.update(null, new LambdaUpdateWrapper<OmsAfterSale>()
+                .eq(OmsAfterSale::getId, id)
+                .eq(OmsAfterSale::getUserId, userId)
+                .and(w -> w.isNull(OmsAfterSale::getUserDeleted)
+                        .or().eq(OmsAfterSale::getUserDeleted, OmsAfterSale.DELETE_VISIBLE))
+                .in(OmsAfterSale::getStatus, OmsAfterSale.STATUS_PENDING, OmsAfterSale.STATUS_PROCESSING)
+                .set(OmsAfterSale::getStatus, OmsAfterSale.STATUS_COMPLETED)
+                .set(OmsAfterSale::getHandleRemark, "用户已确认售后完成")
+                .set(OmsAfterSale::getHandleTime, LocalDateTime.now()));
+        if (updated <= 0) {
+            throw AppException.conflict("售后状态已变化,请刷新后重试");
+        }
     }
 
     /**
@@ -205,19 +223,20 @@ public class OmsAfterSaleServiceImpl extends ServiceImpl<OmsAfterSaleMapper, Oms
     public void deleteMy(Long id) {
         Long userId = StpUtil.getLoginIdAsLong();
         OmsAfterSale afterSale = afterSaleMapper.selectById(id);
-        if (afterSale == null || Integer.valueOf(1).equals(afterSale.getUserDeleted())) {
-            throw new RuntimeException("After-sale request not found");
+        if (afterSale == null || Integer.valueOf(OmsAfterSale.DELETE_DELETED).equals(afterSale.getUserDeleted())) {
+            throw AppException.notFound("售后请求不存在");
         }
         if (!Objects.equals(afterSale.getUserId(), userId)) {
-            throw new RuntimeException("No permission");
+            throw AppException.forbidden("无权操作该售后请求");
         }
 
         LocalDateTime now = LocalDateTime.now();
         LambdaUpdateWrapper<OmsAfterSale> wrapper = new LambdaUpdateWrapper<OmsAfterSale>()
                 .eq(OmsAfterSale::getId, id)
                 .eq(OmsAfterSale::getUserId, userId)
-                .and(w -> w.isNull(OmsAfterSale::getUserDeleted).or().eq(OmsAfterSale::getUserDeleted, 0))
-                .set(OmsAfterSale::getUserDeleted, 1);
+                .and(w -> w.isNull(OmsAfterSale::getUserDeleted)
+                        .or().eq(OmsAfterSale::getUserDeleted, OmsAfterSale.DELETE_VISIBLE))
+                .set(OmsAfterSale::getUserDeleted, OmsAfterSale.DELETE_DELETED);
 
         Integer status = afterSale.getStatus();
         if (status != null && (status == OmsAfterSale.STATUS_PENDING || status == OmsAfterSale.STATUS_PROCESSING)) {
@@ -228,7 +247,7 @@ public class OmsAfterSaleServiceImpl extends ServiceImpl<OmsAfterSaleMapper, Oms
 
         int updated = afterSaleMapper.update(null, wrapper);
         if (updated <= 0) {
-            throw new RuntimeException("After-sale request not found");
+            throw AppException.conflict("售后状态已变化,请刷新后重试");
         }
     }
 

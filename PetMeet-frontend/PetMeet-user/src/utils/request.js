@@ -7,6 +7,24 @@ const request = axios.create({
     timeout: 5000
 })
 
+const fallbackMessageByCode = {
+    400: '请求参数有误',
+    403: '没有操作权限',
+    404: '请求的资源不存在',
+    409: '状态已变化,请刷新后重试',
+    500: '系统繁忙,请稍后再试'
+}
+
+const buildBizError = (res) => {
+    const code = res?.code
+    const message = res?.msg || fallbackMessageByCode[code] || '请求失败'
+    const error = new Error(message)
+    error.code = code
+    error.response = res
+    error.__biz = true
+    return error
+}
+
 // 请求拦截器
 request.interceptors.request.use(
     (config) => {
@@ -43,15 +61,25 @@ request.interceptors.response.use(
 
             // 弹出登录框，提醒用户重新登录
             userStore.showLogin()
-            return Promise.reject(new Error(res.msg || 'Unauthorized'))
+            return Promise.reject(buildBizError(res))
         }
 
-        // 处理其他错误
-        ElMessage.error(res.msg || 'Error')
-        return Promise.reject(new Error(res.msg || 'Error'))
+        const err = buildBizError(res)
+        if (!response.config?.silentError) {
+            ElMessage.error(err.message)
+        }
+        return Promise.reject(err)
     },
     (error) => {
-        ElMessage.error(error.message || 'Request Error')
+        if (error && error.__biz) {
+            return Promise.reject(error)
+        }
+        const status = error.response?.status
+        const data = error.response?.data
+        const message = data?.msg || data?.message || fallbackMessageByCode[status] || error.message || '请求失败'
+        if (!error.config?.silentError) {
+            ElMessage.error(message)
+        }
         return Promise.reject(error)
     }
 )

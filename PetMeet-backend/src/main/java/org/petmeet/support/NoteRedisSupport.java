@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Slf4j
 @Component
@@ -23,7 +24,9 @@ public class NoteRedisSupport {
 
     public static final String NOTE_LIST_CACHE_VERSION_KEY = "cache:note:list:ver";
     public static final String NOTE_LIST_CACHE_PREFIX = "cache:note:list:";
-    public static final Duration NOTE_LIST_CACHE_TTL = Duration.ofSeconds(60);
+    public static final Duration NOTE_LIST_CACHE_TTL = Duration.ofMinutes(5);
+    public static final Duration NOTE_LIST_CACHE_JITTER = Duration.ofMinutes(5);
+    public static final Duration NOTE_LIST_VERSION_TTL = Duration.ofDays(7);
 
     public static final String NOTE_LIKE_DIRTY_SET_KEY = "note:like:dirty";
 
@@ -56,7 +59,7 @@ public class NoteRedisSupport {
 
     public void setNoteListPageCache(String key, NoteListPageCacheDTO dto) {
         try {
-            redisTemplate.opsForValue().set(key, JSON.toJSONString(dto), NOTE_LIST_CACHE_TTL);
+            redisTemplate.opsForValue().set(key, JSON.toJSONString(dto), nextNoteListCacheTtl());
         } catch (Exception e) {
             log.debug("write note list cache failed: {}", key, e);
         }
@@ -66,6 +69,7 @@ public class NoteRedisSupport {
         try {
             String v = redisTemplate.opsForValue().get(NOTE_LIST_CACHE_VERSION_KEY);
             if (v == null || v.isBlank()) {
+                redisTemplate.opsForValue().set(NOTE_LIST_CACHE_VERSION_KEY, "1", NOTE_LIST_VERSION_TTL);
                 return 1L;
             }
             return Long.parseLong(v.trim());
@@ -77,6 +81,7 @@ public class NoteRedisSupport {
     public void bumpNoteListCacheVersion() {
         try {
             redisTemplate.opsForValue().increment(NOTE_LIST_CACHE_VERSION_KEY);
+            redisTemplate.expire(NOTE_LIST_CACHE_VERSION_KEY, NOTE_LIST_VERSION_TTL);
         } catch (Exception e) {
             log.debug("bump note list cache version failed", e);
         }
@@ -137,5 +142,10 @@ public class NoteRedisSupport {
         }
         String t = s.trim();
         return t.isEmpty() ? "" : t;
+    }
+
+    private static Duration nextNoteListCacheTtl() {
+        long jitterSeconds = ThreadLocalRandom.current().nextLong(NOTE_LIST_CACHE_JITTER.toSeconds() + 1);
+        return NOTE_LIST_CACHE_TTL.plusSeconds(jitterSeconds);
     }
 }

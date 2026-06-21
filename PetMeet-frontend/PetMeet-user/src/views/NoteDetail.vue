@@ -141,58 +141,41 @@
           <el-divider />
 
         <!-- 评论区 -->
-          <div class="comments-section">
-            <div class="comments-count">评论 {{ commentCount }} 条</div>
-
-            <div v-if="commentLoading && comments.length === 0" class="comments-loading">
-              <el-skeleton :rows="3" animated />
-            </div>
-
-            <div v-else-if="comments.length === 0" class="comments-empty">
-              <el-empty description="暂无评论，快来抢沙发" />
-            </div>
-
-            <div v-else class="comment-list">
-              <div v-for="comment in comments" :key="comment.id" class="comment-item">
-                <el-avatar :size="32" :src="comment.userAvatar" icon="UserFilled" class="comment-avatar" />
-                <div class="comment-content">
-                  <div class="comment-user">
-                    <span>{{ comment.userNickname }}</span>
-                    <span class="comment-time">{{ formatTime(comment.createTime) }}</span>
-                  </div>
-                  <div class="comment-text">{{ comment.content }}</div>
-                </div>
-                <el-button
-                  v-if="comment.mine"
-                  type="danger"
-                  link
-                  size="small"
-                  @click="handleDeleteComment(comment)"
-                >
-                  删除
-                </el-button>
-              </div>
-            </div>
-
-            <div class="comment-load-more" v-if="commentHasMore">
-              <el-button :loading="commentLoading" @click="loadMoreComments">加载更多</el-button>
-            </div>
-          </div>
+          <NoteComments
+            ref="commentPanelRef"
+            :note-id="activeNoteId"
+            :author-id="note?.userId"
+            :initial-count="Number(note?.commentCount || 0)"
+            :can-interact="canInteract"
+            @reply="handleReplyComment"
+            @report="handleReportComment"
+            @count-change="handleCommentCountChange"
+          />
         </div>
 
       <!-- 底部操作区 -->
         <div class="detail-footer">
-          <div class="action-input-wrapper">
-            <input
-              type="text"
-              v-model="commentText"
-              placeholder="说点什么..."
-              class="comment-input"
-              maxlength="200"
-              :disabled="!canInteract || !activeNoteId"
-              @keyup.enter="handleAddComment"
-            />
-            <el-button class="comment-send" type="primary" :disabled="!canInteract || !activeNoteId" @click="handleAddComment">发送</el-button>
+          <div class="comment-composer">
+            <div v-if="replyTarget" class="reply-context">
+              <div class="reply-context-copy">
+                <span>回复 {{ replyTarget.userNickname || '用户' }}</span>
+                <em>{{ replyTarget.content }}</em>
+              </div>
+              <button type="button" @click="clearReplyTarget">取消</button>
+            </div>
+            <div class="action-input-wrapper">
+              <input
+                ref="commentInputRef"
+                type="text"
+                v-model="commentText"
+                :placeholder="commentPlaceholder"
+                class="comment-input"
+                maxlength="200"
+                :disabled="!canInteract || !activeNoteId"
+                @keyup.enter="handleSubmitComment"
+              />
+              <el-button class="comment-send" type="primary" :disabled="!canInteract || !activeNoteId" @click="handleSubmitComment">发送</el-button>
+            </div>
           </div>
           <div class="action-icons">
         <!-- 点赞 -->
@@ -220,8 +203,105 @@
       </div>
     </div>
 
-    <el-dialog v-model="complaintDialogVisible" title="投诉笔记" width="420px">
-      <el-form>
+    <el-dialog
+      v-model="complaintDialogVisible"
+      :title="reportedComment ? '' : complaintDialogTitle"
+      :width="reportedComment ? '520px' : '420px'"
+      :show-close="!reportedComment"
+      :class="{ 'comment-report-dialog': reportedComment }"
+      @closed="handleComplaintDialogClosed"
+    >
+      <div v-if="reportedComment" class="comment-report-panel">
+        <div class="comment-report-header">
+          <h3>举报评论</h3>
+          <button type="button" class="comment-report-close" aria-label="关闭举报弹窗" @click="closeComplaintDialog">
+            <el-icon><Close /></el-icon>
+          </button>
+        </div>
+
+        <div class="comment-report-list">
+          <div
+            v-for="reason in commentComplaintReasons"
+            :key="reason"
+            class="comment-report-reason-block"
+          >
+            <button
+              type="button"
+              class="comment-report-option"
+              :class="{ active: complaintForm.reason === reason }"
+              :aria-pressed="complaintForm.reason === reason"
+              @click="selectComplaintReason(reason)"
+            >
+              <span>{{ reason }}</span>
+              <i class="comment-report-radio" :class="{ checked: complaintForm.reason === reason }" aria-hidden="true"></i>
+            </button>
+
+            <div
+              v-if="complaintForm.reason === reason"
+              ref="commentReportExtraRef"
+              class="comment-report-extra"
+              @paste="handleComplaintEvidencePaste"
+            >
+              <label for="comment-report-content">补充说明（选填）</label>
+              <textarea
+                id="comment-report-content"
+                v-model="complaintForm.content"
+                maxlength="200"
+                rows="3"
+                placeholder="可以补充对方具体行为、上下文等"
+              ></textarea>
+              <span>{{ complaintForm.content.length }}/200</span>
+
+              <div class="comment-report-evidence">
+                <div class="comment-report-evidence-title">
+                  图片凭证（选填，最多3张）
+                </div>
+                <div
+                  class="comment-report-paste-zone"
+                  tabindex="0"
+                  role="group"
+                  aria-label="图片凭证上传区，支持粘贴截图或点击上传"
+                  @paste="handleComplaintEvidencePaste"
+                >
+                  <el-upload
+                    action="/api/common/upload/image"
+                    name="file"
+                    :data="{ biz: 'complaintEvidence' }"
+                    :headers="uploadHeaders"
+                    v-model:file-list="complaintEvidenceFileList"
+                    list-type="picture-card"
+                    accept="image/*"
+                    :limit="3"
+                    :before-upload="beforeComplaintEvidenceUpload"
+                    :on-success="handleComplaintEvidenceSuccess"
+                    :on-remove="handleComplaintEvidenceRemove"
+                    :on-exceed="handleComplaintEvidenceExceed"
+                  >
+                    <el-icon><Plus /></el-icon>
+                  </el-upload>
+                  <div class="comment-report-paste-hint">
+                    <strong>截图后按Ctrl+V粘贴</strong>
+                    <span>或点击加号上传</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="comment-report-submitbar">
+          <button
+            type="button"
+            class="comment-report-submit"
+            :disabled="complaintSubmitting"
+            @click="submitComplaint"
+          >
+            {{ complaintSubmitting ? '提交中' : '提交' }}
+          </button>
+        </div>
+      </div>
+
+      <el-form v-else>
         <el-form-item label="原因">
           <el-radio-group v-model="complaintForm.reason">
             <el-radio v-for="r in complaintReasons" :key="r" :label="r">{{ r }}</el-radio>
@@ -231,7 +311,7 @@
           <el-input v-model="complaintForm.content" type="textarea" :rows="3" placeholder="补充说明（可选）" />
         </el-form-item>
       </el-form>
-      <template #footer>
+      <template v-if="!reportedComment" #footer>
         <el-button @click="complaintDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="complaintSubmitting" @click="submitComplaint">提交</el-button>
       </template>
@@ -244,8 +324,9 @@ import { ref, watch, onMounted, onUnmounted, nextTick, computed, reactive } from
 import { useRouter, useRoute } from 'vue-router'
 import { formatTime } from '@/utils/format'
 import { ElMessage } from 'element-plus'
-import { Close, UserFilled, Star, StarFilled, ArrowRight, Warning, VideoPlay } from '@element-plus/icons-vue'
+import { Close, UserFilled, Star, StarFilled, ArrowRight, Warning, VideoPlay, Plus } from '@element-plus/icons-vue'
 import HeartIcon from '@/components/HeartIcon.vue'
+import NoteComments from '@/components/NoteComments.vue'
 import request from '@/utils/request'
 import { submitComplaint as submitComplaintApi } from '@/api/complaint'
 import { getImageUrl, getAvatarUrl } from '@/utils/image'
@@ -279,6 +360,11 @@ const note = ref(props.initialNote ? { ...props.initialNote } : null)
 const pendingNote = ref(null) // { note: object, id: string|number } applied after opening animation
 const loading = ref(!props.initialNote)
 const commentText = ref('')
+const commentInputRef = ref(null)
+const commentPanelRef = ref(null)
+const commentReportExtraRef = ref(null)
+const complaintEvidenceFileList = ref([])
+const replyTarget = ref(null)
 const containerRef = ref(null)
 const overlayVisible = ref(false)
 const opening = ref(true)
@@ -288,18 +374,27 @@ const collectBusy = ref(false)
 const likeBounce = ref(false)
 const followLoading = ref(false)
 const isFollowing = ref(false)
-const comments = ref([])
 const complaintDialogVisible = ref(false)
 const complaintSubmitting = ref(false)
+const complaintPasteUploading = ref(false)
+const reportedComment = ref(null)
 const complaintForm = reactive({
   reason: '',
-  content: ''
+  content: '',
+  evidenceImages: []
 })
 const complaintReasons = ['侵权', '盗用', '其他']
-const commentPage = ref(1)
-const commentSize = 10
-const commentTotal = ref(0)
-const commentLoading = ref(false)
+const commentComplaintReasons = [
+  '辱骂攻击',
+  '引战挑衅',
+  '垃圾广告',
+  '虚假误导',
+  '低俗不适',
+  '违法违规',
+  '骚扰诱导',
+  '未成年相关',
+  '其他问题'
+]
 const videoSrc = ref('')
 let videoTimer = null
 let previousBodyOverflow = ''
@@ -312,8 +407,11 @@ const EASING_OUT = 'cubic-bezier(0.16, 1, 0.3, 1)'
 const EASING_IN = 'cubic-bezier(0.4, 0, 1, 1)'
 const FINAL_RADIUS = 20
 
-const commentHasMore = computed(() => comments.value.length < commentTotal.value)
-const commentCount = computed(() => Math.max(Number(note.value?.commentCount || 0), commentTotal.value))
+const commentPlaceholder = computed(() => replyTarget.value ? `回复 ${replyTarget.value.userNickname || '用户'}...` : '说点什么...')
+const complaintDialogTitle = computed(() => reportedComment.value ? '举报评论' : '投诉笔记')
+const uploadHeaders = computed(() => ({
+  Authorization: userStore.token || localStorage.getItem('token') || ''
+}))
 const getNoteStatusText = (status) => {
   const map = { 0: '审核中', 1: '已发布', 2: '已屏蔽', 3: '已拒绝' }
   return map[status] || '未知'
@@ -526,50 +624,7 @@ const handleFollow = async () => {
 }
 
 
-const fetchComments = async (reset = false) => {
-  const noteId = activeNoteId.value
-  if (!noteId) return
-  if (commentLoading.value) return
-  if (reset) {
-    commentPage.value = 1
-    comments.value = []
-    commentTotal.value = 0
-  }
-
-  commentLoading.value = true
-  try {
-    const res = await request.get('/comment/list', {
-      params: {
-        noteId,
-        pageNum: commentPage.value,
-        pageSize: commentSize
-      }
-    })
-
-    const records = res?.records || []
-    const total = res?.total || records.length
-
-    const mapped = records.map((item) => ({
-      ...item,
-      userAvatar: getAvatarUrl(item.userAvatar)
-    }))
-
-    comments.value = comments.value.concat(mapped)
-    commentTotal.value = total
-    if (mapped.length > 0) {
-      commentPage.value += 1
-    }
-  } finally {
-    commentLoading.value = false
-  }
-}
-
-const loadMoreComments = () => {
-  if (!commentHasMore.value) return
-  fetchComments(false)
-}
-
-const handleAddComment = async () => {
+const handleSubmitComment = async () => {
   if (!requireLogin()) return
   if (!canInteract.value) {
     ElMessage.warning('审核中暂不可互动')
@@ -587,46 +642,191 @@ const handleAddComment = async () => {
   }
 
   try {
-    const id = await request.post('/comment/add', {
-      noteId,
-      content
-    })
-
-    const user = userStore.userInfo || {}
-    comments.value.unshift({
-      id,
-      noteId,
-      userId: user.id,
-      content,
-      createTime: new Date().toISOString(),
-      userNickname: user.nickname || '用户',
-      userAvatar: getAvatarUrl(user.avatar),
-      mine: true
-    })
-    commentTotal.value += 1
-    if (note.value) {
-      note.value.commentCount = (note.value.commentCount || 0) + 1
+    const ok = await commentPanelRef.value?.submitComment(content, replyTarget.value)
+    if (ok) {
+      commentText.value = ''
+      replyTarget.value = null
     }
-    commentText.value = ''
   } catch (e) {
     // 这里交给拦截器统一处理
   }
 }
 
-const handleDeleteComment = async (comment) => {
-  if (!comment?.id) return
+const handleReplyComment = (comment) => {
   if (!requireLogin()) return
-  try {
-    await request.delete(`/comment/${comment.id}`)
-    comments.value = comments.value.filter((item) => item.id !== comment.id)
-    commentTotal.value = Math.max(0, commentTotal.value - 1)
-    if (note.value) {
-      note.value.commentCount = Math.max(0, (note.value.commentCount || 0) - 1)
-    }
-    ElMessage.success('已删除评论')
-  } catch (e) {
-    // 这里交给拦截器统一处理
+  if (!canInteract.value) {
+    ElMessage.warning('审核中暂不可互动')
+    return
   }
+  replyTarget.value = comment
+  nextTick(() => {
+    commentInputRef.value?.focus()
+  })
+}
+
+const clearReplyTarget = () => {
+  replyTarget.value = null
+}
+
+const resetComplaintForm = () => {
+  complaintForm.reason = ''
+  complaintForm.content = ''
+  complaintForm.evidenceImages = []
+  complaintEvidenceFileList.value = []
+}
+
+const selectComplaintReason = (reason) => {
+  complaintForm.reason = reason
+  nextTick(() => {
+    const extra = Array.isArray(commentReportExtraRef.value)
+      ? commentReportExtraRef.value[0]
+      : commentReportExtraRef.value
+    extra?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  })
+}
+
+const syncComplaintEvidence = (files) => {
+  const list = Array.isArray(files) ? files : []
+  complaintForm.evidenceImages = list
+    .filter((file) => file.status !== 'uploading')
+    .map((file) => file.rawUrl || file.response?.data || '')
+    .filter(Boolean)
+}
+
+const beforeComplaintEvidenceUpload = (file) => {
+  if (!file?.type?.startsWith('image/')) {
+    ElMessage.warning('只能上传图片凭证')
+    return false
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    ElMessage.warning('单张图片不能超过10MB')
+    return false
+  }
+  return true
+}
+
+const handleComplaintEvidenceSuccess = (response, uploadFile, uploadFiles) => {
+  if (response?.code !== 200 || !response?.data) {
+    ElMessage.error(response?.message || response?.msg || '凭证上传失败')
+    return
+  }
+  uploadFile.rawUrl = response.data
+  uploadFile.url = getImageUrl(response.data)
+  complaintEvidenceFileList.value = Array.isArray(uploadFiles) ? [...uploadFiles] : complaintEvidenceFileList.value
+  syncComplaintEvidence(uploadFiles)
+}
+
+const handleComplaintEvidenceRemove = (uploadFile, uploadFiles) => {
+  complaintEvidenceFileList.value = Array.isArray(uploadFiles) ? [...uploadFiles] : []
+  syncComplaintEvidence(uploadFiles)
+}
+
+const handleComplaintEvidenceExceed = () => {
+  ElMessage.warning('最多上传3张图片凭证')
+}
+
+const buildClipboardImageFile = (blob, index = 0) => {
+  const extension = blob.type?.split('/')[1] || 'png'
+  const filename = `complaint-evidence-${Date.now()}-${index}.${extension}`
+  return new File([blob], filename, { type: blob.type || 'image/png' })
+}
+
+const uploadComplaintEvidenceFile = async (file) => {
+  if (!beforeComplaintEvidenceUpload(file)) return
+  if (complaintEvidenceFileList.value.length >= 3) {
+    handleComplaintEvidenceExceed()
+    return
+  }
+
+  const uid = `paste-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  const previewUrl = URL.createObjectURL(file)
+  const uploadItem = {
+    uid,
+    name: file.name,
+    status: 'uploading',
+    percentage: 0,
+    url: previewUrl,
+    raw: file
+  }
+  complaintEvidenceFileList.value = [...complaintEvidenceFileList.value, uploadItem]
+
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const imageUrl = await request({
+      url: '/common/upload/image',
+      method: 'post',
+      params: { biz: 'complaintEvidence' },
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    complaintEvidenceFileList.value = complaintEvidenceFileList.value.map((item) => item.uid === uid
+      ? {
+          ...item,
+          status: 'success',
+          percentage: 100,
+          rawUrl: imageUrl,
+          url: getImageUrl(imageUrl)
+        }
+      : item)
+    syncComplaintEvidence(complaintEvidenceFileList.value)
+  } catch (e) {
+    complaintEvidenceFileList.value = complaintEvidenceFileList.value.filter((item) => item.uid !== uid)
+    syncComplaintEvidence(complaintEvidenceFileList.value)
+    ElMessage.error(e?.message || '截图上传失败')
+  } finally {
+    URL.revokeObjectURL(previewUrl)
+  }
+}
+
+const handleComplaintEvidencePaste = async (event) => {
+  const items = Array.from(event.clipboardData?.items || [])
+  const imageFiles = items
+    .filter((item) => item.type?.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter(Boolean)
+    .sort((a, b) => b.size - a.size)
+  if (!imageFiles.length) return
+
+  event.preventDefault()
+  event.stopPropagation()
+  if (complaintPasteUploading.value || complaintEvidenceFileList.value.some((file) => file.status === 'uploading')) {
+    ElMessage.warning('图片凭证上传中，请稍后再粘贴')
+    return
+  }
+  if (complaintEvidenceFileList.value.length >= 3) {
+    handleComplaintEvidenceExceed()
+    return
+  }
+
+  const file = buildClipboardImageFile(imageFiles[0])
+  complaintPasteUploading.value = true
+  try {
+    await uploadComplaintEvidenceFile(file)
+  } finally {
+    complaintPasteUploading.value = false
+  }
+}
+
+const closeComplaintDialog = () => {
+  complaintDialogVisible.value = false
+}
+
+const handleComplaintDialogClosed = () => {
+  reportedComment.value = null
+  resetComplaintForm()
+}
+
+const handleReportComment = (comment) => {
+  if (!requireLogin()) return
+  reportedComment.value = comment
+  resetComplaintForm()
+  complaintDialogVisible.value = true
+}
+
+const handleCommentCountChange = (delta) => {
+  if (!note.value) return
+  note.value.commentCount = Math.max(0, Number(note.value.commentCount || 0) + Number(delta || 0))
 }
 
 const handleLike = async () => {
@@ -703,14 +903,14 @@ const handleCollect = async () => {
 
 const handleComplaint = () => {
   if (!requireLogin()) return
-  complaintForm.reason = ''
-  complaintForm.content = ''
+  reportedComment.value = null
+  resetComplaintForm()
   complaintDialogVisible.value = true
 }
 
 const submitComplaint = async () => {
   if (!complaintForm.reason) {
-    ElMessage.warning('请选择投诉原因')
+    ElMessage.warning(`请选择${reportedComment.value ? '举报' : '投诉'}原因`)
     return
   }
   const noteId = activeNoteId.value
@@ -718,14 +918,25 @@ const submitComplaint = async () => {
     ElMessage.warning('笔记信息加载中，请稍后再试')
     return
   }
+  if (complaintEvidenceFileList.value.some((file) => file.status === 'uploading')) {
+    ElMessage.warning('图片凭证上传中，请稍后提交')
+    return
+  }
+  const isCommentReport = Boolean(reportedComment.value?.id)
   complaintSubmitting.value = true
   try {
-    await submitComplaintApi({
+    const payload = {
       noteId,
       reason: complaintForm.reason,
-      content: complaintForm.content?.trim() || ''
-    })
-    ElMessage.success('投诉已提交，正在核查中，可在「通知-投诉」查看进度')
+      content: complaintForm.content?.trim() || '',
+      evidenceImages: complaintForm.evidenceImages || []
+    }
+    if (isCommentReport) {
+      payload.targetType = 'comment'
+      payload.commentId = reportedComment.value.id
+    }
+    await submitComplaintApi(payload)
+    ElMessage.success(`${isCommentReport ? '举报' : '投诉'}已提交，正在核查中，可在「通知-投诉」查看进度`)
     complaintDialogVisible.value = false
   } finally {
     complaintSubmitting.value = false
@@ -737,8 +948,6 @@ const applyNotePayload = (nextNote, id) => {
   scheduleVideoLoad(id)
   // 关注状态和评论这类稍重一点的请求，尽量放到打开后再补
   fetchFollowStatus()
-  commentTotal.value = Number(nextNote?.commentCount || 0)
-  fetchComments(true)
 }
 
 const fetchNote = async (id) => {
@@ -782,6 +991,8 @@ watch(
   (newId) => {
     if (newId) {
       commentText.value = ''
+      replyTarget.value = null
+      reportedComment.value = null
       fetchNote(newId)
     }
   },
@@ -933,6 +1144,297 @@ onUnmounted(() => {
 
   .el-icon {
     font-size: 24px;
+  }
+}
+
+:deep(.comment-report-dialog) {
+  max-width: calc(100vw - 24px);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 22px 70px rgba(29, 24, 27, 0.2);
+}
+
+:deep(.comment-report-dialog .el-dialog__header) {
+  display: none;
+}
+
+:deep(.comment-report-dialog .el-dialog__body) {
+  padding: 0;
+  max-height: min(78vh, 690px);
+  overflow: hidden;
+}
+
+.comment-report-panel {
+  max-height: min(78vh, 690px);
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.comment-report-header {
+  position: relative;
+  height: 74px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid #f1f1f1;
+
+  h3 {
+    margin: 0;
+    color: #2f3033;
+    font-size: 22px;
+    line-height: 1;
+    font-weight: 800;
+  }
+}
+
+.comment-report-close {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  width: 42px;
+  height: 42px;
+  transform: translateY(-50%);
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #5f6064;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.18s ease, color 0.18s ease;
+
+  &:hover {
+    background: #f6f6f6;
+    color: #303033;
+  }
+
+  .el-icon {
+    font-size: 28px;
+  }
+}
+
+.comment-report-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 14px 6px;
+  scrollbar-width: thin;
+}
+
+.comment-report-reason-block {
+  margin: 0 0 8px;
+}
+
+.comment-report-option {
+  width: 100%;
+  min-height: 58px;
+  margin: 0;
+  padding: 0 16px 0 18px;
+  border: none;
+  border-radius: 12px;
+  background: #fff;
+  color: #62646a;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  text-align: left;
+  font-size: 18px;
+  line-height: 1.35;
+  transition: background-color 0.18s ease, color 0.18s ease;
+
+  &:hover,
+  &.active {
+    background: #f6f6f6;
+    color: #2f3033;
+  }
+}
+
+.comment-report-radio {
+  position: relative;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 3px solid #e6e6e8;
+  box-sizing: border-box;
+  transition: border-color 0.18s ease, background-color 0.18s ease;
+
+  &.checked {
+    border-color: #ff8da1;
+    background: #ff8da1;
+  }
+
+  &.checked::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #fff;
+    transform: translate(-50%, -50%);
+  }
+}
+
+.comment-report-extra {
+  margin: 8px 0 4px;
+  padding: 14px;
+  border-radius: 14px;
+  background: #f7f7f8;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  label {
+    color: #3f4044;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 74px;
+    resize: none;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: #333438;
+    font-size: 15px;
+    line-height: 1.55;
+    box-sizing: border-box;
+    font-family: inherit;
+
+    &::placeholder {
+      color: #a1a3a8;
+    }
+  }
+
+  > span {
+    align-self: flex-end;
+    color: #a0a1a6;
+    font-size: 12px;
+    line-height: 1;
+  }
+}
+
+.comment-report-evidence {
+  margin-top: 4px;
+}
+
+.comment-report-evidence-title {
+  margin-bottom: 10px;
+  color: #4f5259;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.comment-report-paste-zone {
+  min-height: 88px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px dashed #d9dbe0;
+  background: #fff;
+  outline: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+
+  &:focus,
+  &:focus-within {
+    border-color: #ff9aae;
+    background: #fffafb;
+    box-shadow: 0 0 0 3px rgba(255, 141, 161, 0.14);
+  }
+}
+
+.comment-report-evidence {
+  :deep(.el-upload--picture-card),
+  :deep(.el-upload-list--picture-card .el-upload-list__item) {
+    width: 68px;
+    height: 68px;
+    border-radius: 12px;
+  }
+
+  :deep(.el-upload--picture-card) {
+    --el-upload-picture-card-size: 68px;
+    background: #fff;
+    border: 1px dashed #d9dbe0;
+    color: #9da0a6;
+  }
+
+  :deep(.el-upload-list--picture-card) {
+    --el-upload-list-picture-card-size: 68px;
+  }
+
+  :deep(.el-upload-list__item-thumbnail) {
+    object-fit: cover;
+  }
+}
+
+.comment-report-paste-hint {
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #a0a3aa;
+  font-size: 12px;
+  line-height: 1.35;
+
+  strong {
+    color: #62666f;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  span {
+    color: #a0a3aa;
+  }
+}
+
+.comment-report-submitbar {
+  flex: 0 0 auto;
+  height: 72px;
+  border-top: 1px solid #ececec;
+  background: rgba(255, 255, 255, 0.96);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.comment-report-submit {
+  min-width: 126px;
+  height: 48px;
+  padding: 0 28px;
+  border: none;
+  border-radius: 999px;
+  background: #ff8da1;
+  color: #fff;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 8px 18px rgba(255, 141, 161, 0.25);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 24px rgba(255, 141, 161, 0.32);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.65;
+    box-shadow: none;
   }
 }
 
@@ -1296,67 +1798,64 @@ onUnmounted(() => {
   }
 }
 
-.comments-section {
-  margin-top: 10px;
-
-  .comments-count {
-    font-size: 14px;
-    color: #666;
-    margin-bottom: 16px;
-  }
-
-  .comment-list {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    margin-bottom: 12px;
-  }
-
-  .comment-item {
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-  }
-
-  .comment-content {
-    flex: 1;
-    min-width: 0;
-
-    .comment-user {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 12px;
-      color: #999;
-      margin-bottom: 4px;
-    }
-
-    .comment-text {
-      font-size: 14px;
-      color: #333;
-      line-height: 1.5;
-      word-break: break-word;
-    }
-  }
-
-  .comment-load-more {
-    display: flex;
-    justify-content: center;
-    margin-top: 8px;
-  }
-}
-
 .detail-footer {
   padding: 16px 24px;
   border-top: 1px solid #f8f8f8;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 20px;
 
-  .action-input-wrapper {
+  .comment-composer {
     flex: 1;
     min-width: 0;
     margin-right: 16px;
+  }
+
+  .reply-context {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 34px;
+    margin-bottom: 8px;
+    padding: 7px 12px;
+    border-radius: 12px;
+    background: #f7f7f7;
+    color: #777;
+    box-sizing: border-box;
+  }
+
+  .reply-context-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 13px;
+    line-height: 1.3;
+
+    span,
+    em {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    em {
+      color: #aaa;
+      font-style: normal;
+    }
+  }
+
+  .reply-context button {
+    flex: 0 0 auto;
+    border: 0;
+    background: transparent;
+    color: #666;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .action-input-wrapper {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -1432,6 +1931,63 @@ onUnmounted(() => {
         transform: scale(0.95);
       }
     }
+  }
+}
+
+@media (max-width: 640px) {
+  :deep(.comment-report-dialog) {
+    width: calc(100vw - 24px) !important;
+    margin: 0 auto;
+    border-radius: 16px;
+  }
+
+  :deep(.comment-report-dialog .el-dialog__body),
+  .comment-report-panel {
+    max-height: 82vh;
+  }
+
+  .comment-report-header {
+    height: 66px;
+
+    h3 {
+      font-size: 20px;
+    }
+  }
+
+  .comment-report-close {
+    right: 12px;
+    width: 40px;
+    height: 40px;
+  }
+
+  .comment-report-list {
+    padding: 10px 10px 2px;
+  }
+
+  .comment-report-option {
+    min-height: 56px;
+    padding: 0 14px;
+    font-size: 17px;
+    border-radius: 11px;
+  }
+
+  .comment-report-extra {
+    margin-bottom: 2px;
+    padding: 13px;
+
+    textarea {
+      min-height: 70px;
+    }
+  }
+
+  .comment-report-submitbar {
+    height: 68px;
+  }
+
+  .comment-report-submit {
+    min-width: 112px;
+    height: 44px;
+    font-size: 17px;
   }
 }
 

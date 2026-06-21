@@ -3,7 +3,7 @@
     <!-- 侧边栏 -->
     <div class="sidebar">
       <div class="logo-area">
-        <h1>PetMeet Admin</h1>
+        <img src="/brand/petmeet-admin-logo.svg" alt="PetMeet Admin" class="admin-logo" />
       </div>
       <el-menu
         :default-active="$route.path"
@@ -129,9 +129,10 @@ const handleCommand = (command) => {
     font-weight: bold;
     border-bottom: 1px solid #24262b;
     
-    h1 {
-      margin: 0;
-      font-size: inherit;
+    .admin-logo {
+      width: 178px;
+      height: auto;
+      display: block;
     }
   }
 

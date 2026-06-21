@@ -12,23 +12,23 @@ import java.util.List;
 public class AfterSaleApplyDTO {
 
     @Schema(description = "Order id")
-    @NotNull(message = "orderId is required")
+    @NotNull(message = "订单ID不能为空")
     private Long orderId;
 
     @Schema(description = "Order item id")
-    @NotNull(message = "orderItemId is required")
+    @NotNull(message = "订单项ID不能为空")
     private Long orderItemId;
 
     @Schema(description = "Type: 0 refund-only, 1 return-refund, 2 exchange")
-    @NotNull(message = "type is required")
+    @NotNull(message = "售后类型不能为空")
     private Integer type;
 
     @Schema(description = "Reason")
-    @Size(max = 100, message = "reason is too long")
+    @Size(max = 100, message = "原因不能超过100个字符")
     private String reason;
 
     @Schema(description = "Description")
-    @Size(max = 500, message = "description is too long")
+    @Size(max = 500, message = "说明不能超过500个字符")
     private String description;
 
     @Schema(description = "Evidence image urls")

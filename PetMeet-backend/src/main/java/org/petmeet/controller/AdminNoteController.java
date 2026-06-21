@@ -70,7 +70,7 @@ public class AdminNoteController {
     public Result<Void> approve(@PathVariable Long id) {
         // 调用业务层通过审核
         adminNoteService.approve(id);
-        return Result.success("Approved", null);
+        return Result.success("审核通过", null);
     }
 
     /**
@@ -83,7 +83,7 @@ public class AdminNoteController {
             @Parameter(description = "Reject reason") @RequestParam(required = false) String reason) {
         // 调用业务层驳回笔记
         adminNoteService.reject(id, reason);
-        return Result.success("Rejected", null);
+        return Result.success("已拒绝", null);
     }
 
     /**
@@ -94,7 +94,7 @@ public class AdminNoteController {
     public Result<Boolean> sticky(@PathVariable Long id) {
         // 切换笔记置顶状态
         boolean isSticky = adminNoteService.toggleSticky(id);
-        return Result.success(isSticky ? "Sticky" : "Unsticky", isSticky);
+        return Result.success(isSticky ? "已置顶" : "已取消置顶", isSticky);
     }
 
     /**
@@ -105,7 +105,7 @@ public class AdminNoteController {
     public Result<Boolean> recommend(@PathVariable Long id) {
         // 切换笔记推荐状态
         boolean isRecommend = adminNoteService.toggleRecommend(id);
-        return Result.success(isRecommend ? "Recommended" : "Unrecommended", isRecommend);
+        return Result.success(isRecommend ? "已推荐" : "已取消推荐", isRecommend);
     }
 
     /**
@@ -118,7 +118,7 @@ public class AdminNoteController {
             @Parameter(description = "Down reason (optional)") @RequestParam(required = false) String reason) {
         // 切换笔记屏蔽状态
         boolean isShielded = adminNoteService.toggleShield(id, reason);
-        return Result.success(isShielded ? "Shielded" : "Unshielded", isShielded);
+        return Result.success(isShielded ? "已屏蔽" : "已取消屏蔽", isShielded);
     }
 
     // 兼容新旧版管理端，两个路径都保留。
@@ -132,7 +132,7 @@ public class AdminNoteController {
             @Parameter(description = "Delete reason (optional)") @RequestParam(required = false) String reason) {
         // 调用业务层软删除笔记
         adminNoteService.softDelete(id, reason);
-        return Result.success("Soft deleted", null);
+        return Result.success("已删除", null);
     }
 
     /**
@@ -145,6 +145,6 @@ public class AdminNoteController {
             @RequestBody List<Long> ids) {
         // 调用业务层执行批量操作
         adminNoteService.batchAction(action, ids);
-        return Result.success("Batch done", null);
+        return Result.success("批量操作完成", null);
     }
 }

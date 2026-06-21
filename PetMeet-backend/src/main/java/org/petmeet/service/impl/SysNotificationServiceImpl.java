@@ -1,5 +1,7 @@
 package org.petmeet.service.impl;
 
+import org.petmeet.common.AppException;
+
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -66,7 +68,7 @@ public class SysNotificationServiceImpl extends ServiceImpl<SysNotificationMappe
                         .set(SysNotification::getReadTime, LocalDateTime.now())
         );
         if (updated <= 0) {
-            throw new RuntimeException("通知不存在");
+            throw AppException.notFound("通知不存在");
         }
     }
 
@@ -98,7 +100,7 @@ public class SysNotificationServiceImpl extends ServiceImpl<SysNotificationMappe
                         .eq(SysNotification::getUserId, userId)
         );
         if (deleted <= 0) {
-            throw new RuntimeException("通知不存在");
+            throw AppException.notFound("通知不存在");
         }
     }
 

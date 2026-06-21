@@ -1,5 +1,7 @@
 package org.petmeet.service.impl;
 
+import org.petmeet.common.AppException;
+
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson2.JSON;
@@ -73,7 +75,7 @@ public class AdminProductServiceImpl implements AdminProductService {
         // 查询商品详情
         PmsProduct product = pmsProductMapper.selectById(id);
         if (product == null) {
-            throw new RuntimeException("商品不存在");
+            throw AppException.notFound("商品不存在");
         }
         AdminProductDetailVO vo = new AdminProductDetailVO();
         BeanUtil.copyProperties(toVO(product), vo);
@@ -91,7 +93,7 @@ public class AdminProductServiceImpl implements AdminProductService {
         normalizeCoverImgs(product);
         product.setCreateTime(LocalDateTime.now());
         if (product.getStatus() == null) {
-            product.setStatus(0);
+            product.setStatus(PmsProduct.STATUS_OFF_SHELF);
         }
         if (product.getSales() == null) {
             product.setSales(0);
@@ -111,7 +113,7 @@ public class AdminProductServiceImpl implements AdminProductService {
         // 查询原商品
         PmsProduct existing = pmsProductMapper.selectById(dto.getId());
         if (existing == null) {
-            throw new RuntimeException("商品不存在");
+            throw AppException.notFound("商品不存在");
         }
         PmsProduct product = new PmsProduct();
         BeanUtil.copyProperties(dto, product);
@@ -134,7 +136,7 @@ public class AdminProductServiceImpl implements AdminProductService {
     public void changeStatus(Long id, Integer status) {
         PmsProduct product = pmsProductMapper.selectById(id);
         if (product == null) {
-            throw new RuntimeException("商品不存在");
+            throw AppException.notFound("商品不存在");
         }
         product.setStatus(status);
         pmsProductMapper.updateById(product);
@@ -147,7 +149,7 @@ public class AdminProductServiceImpl implements AdminProductService {
     public void deleteProduct(Long id) {
         PmsProduct product = pmsProductMapper.selectById(id);
         if (product == null) {
-            throw new RuntimeException("商品不存在");
+            throw AppException.notFound("商品不存在");
         }
         pmsProductMapper.deleteById(id);
     }

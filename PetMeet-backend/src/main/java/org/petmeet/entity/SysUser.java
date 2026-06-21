@@ -14,6 +14,13 @@ import java.time.LocalDateTime;
 public class SysUser implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    public static final int STATUS_DISABLED = 0;
+    public static final int STATUS_ENABLED = 1;
+
+    public static final String ROLE_USER = "user";
+    public static final String ROLE_ADMIN = "admin";
+    public static final String ROLE_INFLUENCER = "influencer";
+
     @TableId(type = IdType.AUTO)
     @Schema(description = "用户ID")
     private Long id;

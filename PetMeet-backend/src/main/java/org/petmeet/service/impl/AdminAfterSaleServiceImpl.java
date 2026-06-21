@@ -1,5 +1,7 @@
 package org.petmeet.service.impl;
 
+import org.petmeet.common.AppException;
+
 import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -44,7 +46,7 @@ public class AdminAfterSaleServiceImpl implements AdminAfterSaleService {
     public Page<AdminAfterSaleVO> pageList(Integer pageNum, Integer pageSize, Integer status, String keyword) {
         Page<OmsAfterSale> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<OmsAfterSale> wrapper = new LambdaQueryWrapper<>();
-        wrapper.and(w -> w.isNull(OmsAfterSale::getAdminDeleted).or().eq(OmsAfterSale::getAdminDeleted, 0));
+        wrapper.and(w -> w.isNull(OmsAfterSale::getAdminDeleted).or().eq(OmsAfterSale::getAdminDeleted, OmsAfterSale.DELETE_VISIBLE));
         if (status != null) {
             wrapper.eq(OmsAfterSale::getStatus, status);
         }
@@ -173,22 +175,34 @@ public class AdminAfterSaleServiceImpl implements AdminAfterSaleService {
     public void updateStatus(Long id, Integer status, String remark) {
         // 查询售后申请
         OmsAfterSale afterSale = afterSaleMapper.selectById(id);
-        if (afterSale == null || Integer.valueOf(1).equals(afterSale.getAdminDeleted())) {
-            throw new RuntimeException("未找到售后请求");   }
+        if (afterSale == null || Integer.valueOf(OmsAfterSale.DELETE_DELETED).equals(afterSale.getAdminDeleted())) {
+            throw AppException.notFound("未找到售后请求");   }
         if (status == null || (status != OmsAfterSale.STATUS_PROCESSING
                 && status != OmsAfterSale.STATUS_COMPLETED
                 && status != OmsAfterSale.STATUS_REJECTED)) {
-            throw new RuntimeException("售后状态无效");   }
+            throw AppException.badRequest("售后状态无效");   }
         Integer current = afterSale.getStatus();
         if (current != null && (current == OmsAfterSale.STATUS_COMPLETED
                 || current == OmsAfterSale.STATUS_REJECTED
                 || current == OmsAfterSale.STATUS_CANCELED)) {
-            throw new RuntimeException("当前状态无法更改");   }
+            throw AppException.conflict("当前状态无法更改");   }
         String handleRemark = StrUtil.trimToNull(remark);
-        afterSale.setStatus(status);
-        afterSale.setHandleRemark(handleRemark);
-        afterSale.setHandleTime(LocalDateTime.now());
-        afterSaleMapper.updateById(afterSale);
+        LambdaUpdateWrapper<OmsAfterSale> updateWrapper = new LambdaUpdateWrapper<OmsAfterSale>()
+                .eq(OmsAfterSale::getId, id)
+                .and(w -> w.isNull(OmsAfterSale::getAdminDeleted)
+                        .or().eq(OmsAfterSale::getAdminDeleted, OmsAfterSale.DELETE_VISIBLE))
+                .set(OmsAfterSale::getStatus, status)
+                .set(OmsAfterSale::getHandleRemark, handleRemark)
+                .set(OmsAfterSale::getHandleTime, LocalDateTime.now());
+        if (current == null) {
+            updateWrapper.isNull(OmsAfterSale::getStatus);
+        } else {
+            updateWrapper.eq(OmsAfterSale::getStatus, current);
+        }
+        int updated = afterSaleMapper.update(null, updateWrapper);
+        if (updated <= 0) {
+            throw AppException.conflict("售后状态已变化,请刷新后重试");
+        }
         // 通知用户售后状态已变更
         OmsOrder order = orderMapper.selectById(afterSale.getOrderId());
         notificationService.sendToUser(
@@ -203,8 +217,13 @@ public class AdminAfterSaleServiceImpl implements AdminAfterSaleService {
             return; }
         if (status == OmsAfterSale.STATUS_REJECTED) {
             // 驳回退款时恢复订单为已支付待发货
-            order.setStatus(OmsOrder.STATUS_PAID);
-            orderMapper.updateById(order);
+            boolean orderLocked = orderMapper.update(null, new LambdaUpdateWrapper<OmsOrder>()
+                    .eq(OmsOrder::getId, order.getId())
+                    .eq(OmsOrder::getStatus, OmsOrder.STATUS_REFUNDING)
+                    .set(OmsOrder::getStatus, OmsOrder.STATUS_PAID)) > 0;
+            if (!orderLocked) {
+                throw AppException.conflict("订单状态已变化,请刷新后重试");
+            }
             afterSaleMapper.update(null, new LambdaUpdateWrapper<OmsAfterSale>()
                     .eq(OmsAfterSale::getOrderId, order.getId())
                     .in(OmsAfterSale::getStatus, OmsAfterSale.STATUS_PENDING, OmsAfterSale.STATUS_PROCESSING)
@@ -217,12 +236,18 @@ public class AdminAfterSaleServiceImpl implements AdminAfterSaleService {
             Long activeCount = afterSaleMapper.selectCount(new LambdaQueryWrapper<OmsAfterSale>()
                     .eq(OmsAfterSale::getOrderId, order.getId())
                     .and(w ->
-                            w.isNull(OmsAfterSale::getAdminDeleted).or().eq(OmsAfterSale::getAdminDeleted, 0))
+                            w.isNull(OmsAfterSale::getAdminDeleted)
+                                    .or().eq(OmsAfterSale::getAdminDeleted, OmsAfterSale.DELETE_VISIBLE))
                     .in(OmsAfterSale::getStatus, OmsAfterSale.STATUS_PENDING, OmsAfterSale.STATUS_PROCESSING));
             if (activeCount != null && activeCount == 0) {
+                boolean orderLocked = orderMapper.update(null, new LambdaUpdateWrapper<OmsOrder>()
+                        .eq(OmsOrder::getId, order.getId())
+                        .eq(OmsOrder::getStatus, OmsOrder.STATUS_REFUNDING)
+                        .set(OmsOrder::getStatus, OmsOrder.STATUS_CLOSED)) > 0;
+                if (!orderLocked) {
+                    throw AppException.conflict("订单状态已变化,请刷新后重试");
+                }
                 rollbackStock(order.getId());
-                order.setStatus(OmsOrder.STATUS_CLOSED);
-                orderMapper.updateById(order);
             }
         }
     }
@@ -234,18 +259,19 @@ public class AdminAfterSaleServiceImpl implements AdminAfterSaleService {
     @Transactional(rollbackFor = Exception.class)
     public void softDelete(Long id) {
         OmsAfterSale afterSale = afterSaleMapper.selectById(id);
-        if (afterSale == null || Integer.valueOf(1).equals(afterSale.getAdminDeleted())) {
-            throw new RuntimeException("After-sale request not found");
+        if (afterSale == null || Integer.valueOf(OmsAfterSale.DELETE_DELETED).equals(afterSale.getAdminDeleted())) {
+            throw AppException.notFound("售后请求不存在");
         }
 
         if (!canSoftDeleteStatus(afterSale.getStatus())) {
-            throw new RuntimeException("Only completed/rejected/canceled requests can be deleted");
+            throw AppException.badRequest("仅已完成、已拒绝或已取消的售后记录可删除");
         }
 
         afterSaleMapper.update(null, new LambdaUpdateWrapper<OmsAfterSale>()
                 .eq(OmsAfterSale::getId, id)
-                .and(w -> w.isNull(OmsAfterSale::getAdminDeleted).or().eq(OmsAfterSale::getAdminDeleted, 0))
-                .set(OmsAfterSale::getAdminDeleted, 1));
+                .and(w -> w.isNull(OmsAfterSale::getAdminDeleted)
+                        .or().eq(OmsAfterSale::getAdminDeleted, OmsAfterSale.DELETE_VISIBLE))
+                .set(OmsAfterSale::getAdminDeleted, OmsAfterSale.DELETE_DELETED));
     }
 
     /**

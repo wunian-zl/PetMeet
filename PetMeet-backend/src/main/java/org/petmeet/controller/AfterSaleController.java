@@ -30,7 +30,7 @@ public class AfterSaleController {
     public Result<Long> apply(@Valid @RequestBody AfterSaleApplyDTO dto) {
         // 调用业务层创建售后申请
         Long id = afterSaleService.apply(dto);
-        return Result.success("After-sale applied", id);
+        return Result.success("售后申请已提交", id);
     }
 
     /**
@@ -55,7 +55,7 @@ public class AfterSaleController {
     public Result<Void> cancel(@PathVariable Long id) {
         // 调用业务层取消售后申请
         afterSaleService.cancel(id);
-        return Result.success("After-sale canceled", null);
+        return Result.success("售后申请已取消", null);
     }
 
     /**
@@ -66,7 +66,7 @@ public class AfterSaleController {
     public Result<Void> complete(@PathVariable Long id) {
         // 调用业务层完成售后流程
         afterSaleService.complete(id);
-        return Result.success("After-sale completed", null);
+        return Result.success("售后已确认完成", null);
     }
 
     /**
@@ -77,6 +77,6 @@ public class AfterSaleController {
     public Result<Void> deleteMy(@PathVariable Long id) {
         // 调用业务层删除当前用户的售后记录
         afterSaleService.deleteMy(id);
-        return Result.success("After-sale deleted", null);
+        return Result.success("售后申请已删除", null);
     }
 }

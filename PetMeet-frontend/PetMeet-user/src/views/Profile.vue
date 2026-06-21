@@ -1483,8 +1483,10 @@ const handleCancelOrder = async (row) => {
     })
     await request.post(`/order/cancel/${row.id}`)
     ElMessage.success('订单已取消')
-    getOrders()
-    userStore.fetchUnpaidOrderCount()
+    orderDetailVisible.value = false
+    orderDetail.value = null
+    await getOrders()
+    await userStore.fetchUnpaidOrderCount()
   } catch (e) {}
 }
 
@@ -1648,6 +1650,15 @@ const goPublishFromOrder = async (order) => {
 const orderDetailVisible = ref(false)
 const orderDetailLoading = ref(false)
 const orderDetail = ref(null)
+
+const refreshOrdersAfterExternalChange = async () => {
+  activeTab.value = 'orders'
+  orderSubTab.value = normalizeOrderSubTab(route.query.orderSubTab) || 'all'
+  orderDetailVisible.value = false
+  orderDetail.value = null
+  await getOrders()
+  await userStore.fetchUnpaidOrderCount()
+}
 
 const openOrderDetail = async (row) => {
   if (!row?.id) return
@@ -2126,6 +2137,11 @@ watch(() => route.query.afterSaleTab, (tab) => {
 watch(() => route.query.orderId, (orderId) => {
     if (!orderId) return
     openOrderDetailFromRoute(orderId)
+})
+
+watch(() => route.query.refresh, async (refresh) => {
+    if (!refresh) return
+    await refreshOrdersAfterExternalChange()
 })
 
 let hasActivatedOnce = false

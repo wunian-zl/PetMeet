@@ -28,7 +28,7 @@ public class AdminNoteStatsVO {
     @Schema(description = "已屏蔽数量")
     private Integer shieldedCount;
 
-    @Schema(description = "Rejected count")
+    @Schema(description = "已拒绝 count")
     private Integer rejectedCount;
 
     @Schema(description = "用户主动下架数量")

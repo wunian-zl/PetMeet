@@ -73,6 +73,7 @@
                        <div class="order-source-tag">
                            <el-tag size="small" type="primary" effect="plain">{{ row.payType || '未支付' }}</el-tag>
                        </div>
+                       <div v-if="row.paySn" class="pay-sn-line">{{ row.paySn }}</div>
                    </div>
                 </template>
             </el-table-column>
@@ -271,10 +272,19 @@
                 <el-col :span="12">
                     <el-descriptions title="付款信息" :column="1" border>
                          <el-descriptions-item label="支付方式">{{ currentOrder.payType || '未支付' }}</el-descriptions-item>
+                         <el-descriptions-item label="支付流水">{{ currentOrder.paySn || '-' }}</el-descriptions-item>
+                         <el-descriptions-item label="第三方交易号">{{ currentOrder.tradeNo || '-' }}</el-descriptions-item>
                          <el-descriptions-item label="商品总额">¥{{ (currentOrder.amount + (currentOrder.discount?.coupon || 0)).toFixed(2) }}</el-descriptions-item>
                          <el-descriptions-item label="优惠金额">- ¥{{ (currentOrder.discount?.coupon || 0).toFixed(2) }}</el-descriptions-item>
                          <el-descriptions-item label="实付金额">
                             <span class="highlight-price">¥{{ currentOrder.amount.toFixed(2) }}</span>
+                         </el-descriptions-item>
+                         <el-descriptions-item label="已退金额">¥{{ currentOrder.refundAmount.toFixed(2) }}</el-descriptions-item>
+                         <el-descriptions-item v-if="currentOrder.refund?.refundSn" label="退款流水">
+                            {{ currentOrder.refund.refundSn }}
+                         </el-descriptions-item>
+                         <el-descriptions-item v-if="currentOrder.refund?.refundStatusDesc" label="退款状态">
+                            {{ currentOrder.refund.refundStatusDesc }}
                          </el-descriptions-item>
                     </el-descriptions>
                 </el-col>
@@ -513,6 +523,9 @@ const mapOrderFromApi = (order) => ({
     orderNo: order.orderNo,
     createTime: formatDateTime(order.createTime),
     payType: order.payType,
+    paySn: order.paySn,
+    tradeNo: order.tradeNo,
+    refundAmount: Number(order.refundAmount || 0),
     status: resolveOrderStatus(order),
     amount: Number(order.totalAmount || 0),
     products: order.items?.map(item => ({
@@ -528,12 +541,17 @@ const mapOrderFromApi = (order) => ({
         phone: order.phone,
         detail: order.address
     },
+    refund: order.refund ? {
+        ...order.refund,
+        refundAmount: Number(order.refund.refundAmount || 0),
+        refundTime: formatDateTime(order.refund.refundTime)
+    } : null,
     logistics: order.shipCompany || order.trackingNo ? {
         company: order.shipCompany,
         trackingNo: order.trackingNo,
         shipTime: formatDateTime(order.shipTime)
     } : null,
-    notes: {},
+    notes: { user: order.remark || '' },
     logs: []
 })
 
@@ -1005,6 +1023,12 @@ const goToNote = (noteId) => {
 }
 .order-source-tag {
     margin-top: 4px;
+}
+.pay-sn-line {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #909399;
+    word-break: break-all;
 }
 .more-products {
     font-size: 12px;

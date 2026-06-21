@@ -59,7 +59,7 @@ public class AdminUserController {
     public Result<Long> create(@RequestBody SysUser user) {
         // 调用业务层创建用户
         Long id = adminUserService.createUser(user);
-        return Result.success("Created", id);
+        return Result.success("创建成功", id);
     }
 
     /**
@@ -71,7 +71,7 @@ public class AdminUserController {
         // 先补齐用户 id，再调用业务层更新
         user.setId(id);
         adminUserService.updateUser(user);
-        return Result.success("Updated", null);
+        return Result.success("更新成功", null);
     }
 
     /**
@@ -84,7 +84,7 @@ public class AdminUserController {
             @Parameter(description = "Ban reason") @RequestParam(required = false) String reason) {
         // 调用业务层封禁用户
         adminUserService.banUser(id, reason);
-        return Result.success("Banned", null);
+        return Result.success("封禁成功", null);
     }
 
     /**
@@ -95,7 +95,7 @@ public class AdminUserController {
     public Result<Void> unban(@PathVariable Long id) {
         // 调用业务层解封用户
         adminUserService.unbanUser(id);
-        return Result.success("Unbanned", null);
+        return Result.success("解封成功", null);
     }
 
     /**
@@ -106,7 +106,7 @@ public class AdminUserController {
     public Result<Void> delete(@PathVariable Long id) {
         // 调用业务层删除用户
         adminUserService.deleteUser(id);
-        return Result.success("Deleted", null);
+        return Result.success("删除成功", null);
     }
 
     /**
@@ -117,7 +117,7 @@ public class AdminUserController {
     public Result<String> resetPassword(@PathVariable Long id) {
         // 调用业务层重置密码
         String newPassword = adminUserService.resetPassword(id);
-        return Result.success("Password reset", newPassword);
+        return Result.success("密码已重置", newPassword);
     }
 
     /**
@@ -128,7 +128,7 @@ public class AdminUserController {
     public Result<Void> forceLogout(@PathVariable Long id) {
         // 调用业务层强制用户下线
         adminUserService.forceLogout(id);
-        return Result.success("Forced logout", null);
+        return Result.success("已强制下线", null);
     }
 
     /**
@@ -139,6 +139,6 @@ public class AdminUserController {
     public Result<Void> harmonizeAvatar(@PathVariable Long id) {
         // 调用业务层统一头像风格
         adminUserService.harmonizeAvatar(id);
-        return Result.success("Harmonized", null);
+        return Result.success("头像已和谐", null);
     }
 }

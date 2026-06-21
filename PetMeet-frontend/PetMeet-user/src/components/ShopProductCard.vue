@@ -1,12 +1,12 @@
 <template>
   <div class="product-card" @click="goToDetail">
     <!-- 1:1 正方形图片区域 -->
-    <div class="card-image">
-      <img :src="product.image" :alt="product.name" loading="lazy" decoding="async" />
+    <div ref="cardImageRef" class="card-image">
+      <img ref="productImageRef" :src="product.image" :alt="product.name" loading="lazy" decoding="async" />
 
       <!-- 悬浮操作栏 -->
       <div class="hover-actions">
-        <button class="action-btn" @click.stop="addToCart">
+        <button class="action-btn" :disabled="addingToCart" @click.stop="addToCart">
           <el-icon><ShoppingCart /></el-icon>
         </button>
       </div>
@@ -28,10 +28,12 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ShoppingCart } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import request from '@/utils/request'
+import { useUserStore } from '@/store/user'
 
 const props = defineProps({
   product: {
@@ -41,14 +43,126 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const userStore = useUserStore()
+const addingToCart = ref(false)
+const cardImageRef = ref(null)
+const productImageRef = ref(null)
 
 const goToDetail = () => {
   router.push(`/product/${props.product.id}`)
 }
 
-const addToCart = () => {
-  ElMessage.success('已加入购物车')
-  // 待办：这里后面要接入真正的加入购物车逻辑，统一走 Pinia 状态管理。
+const flyToCart = (retry = 0) => {
+  const targetEl = document.querySelector('[data-cart-icon]')
+  const startImgEl = productImageRef.value
+  const startEl = startImgEl || cardImageRef.value
+  const imgSrc = (startImgEl && (startImgEl.currentSrc || startImgEl.src)) || props.product.image
+
+  if (!startEl || !targetEl || !imgSrc) {
+    if (retry < 6) {
+      window.setTimeout(() => flyToCart(retry + 1), 80)
+    }
+    return
+  }
+
+  const startRect = startEl.getBoundingClientRect()
+  if (!startRect.width || !startRect.height) {
+    if (retry < 6) {
+      window.setTimeout(() => flyToCart(retry + 1), 80)
+    }
+    return
+  }
+
+  const targetRect = targetEl.getBoundingClientRect()
+  const startSize = Math.min(120, Math.max(56, startRect.width * 0.28))
+  const startLeft = startRect.left + startRect.width / 2 - startSize / 2
+  const startTop = startRect.top + startRect.height / 2 - startSize / 2
+
+  const flyImg = document.createElement('img')
+  flyImg.src = imgSrc
+  flyImg.alt = 'cart-fly'
+  flyImg.decoding = 'async'
+  flyImg.loading = 'eager'
+  flyImg.style.position = 'fixed'
+  flyImg.style.left = `${startLeft}px`
+  flyImg.style.top = `${startTop}px`
+  flyImg.style.width = `${startSize}px`
+  flyImg.style.height = `${startSize}px`
+  flyImg.style.borderRadius = '10px'
+  flyImg.style.objectFit = 'cover'
+  flyImg.style.pointerEvents = 'none'
+  flyImg.style.zIndex = '9999'
+  flyImg.style.boxShadow = '0 8px 20px rgba(0,0,0,0.15)'
+  flyImg.style.transition = 'transform 0.72s cubic-bezier(0.65, -0.1, 0.2, 1.2), opacity 0.72s ease'
+  flyImg.style.transform = 'translate(0, 0) scale(1)'
+  flyImg.style.opacity = '1'
+
+  document.body.appendChild(flyImg)
+
+  const startX = startLeft + startSize / 2
+  const startY = startTop + startSize / 2
+  const endX = targetRect.left + targetRect.width / 2
+  const endY = targetRect.top + targetRect.height / 2
+  const deltaX = endX - startX
+  const deltaY = endY - startY
+
+  const cleanup = () => {
+    flyImg.removeEventListener('transitionend', cleanup)
+    if (flyImg.parentNode) flyImg.parentNode.removeChild(flyImg)
+  }
+
+  const run = () => {
+    flyImg.getBoundingClientRect()
+    requestAnimationFrame(() => {
+      flyImg.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.12)`
+      flyImg.style.opacity = '0.2'
+    })
+
+    targetEl.classList.add('cart-bounce')
+    window.setTimeout(() => {
+      targetEl.classList.remove('cart-bounce')
+    }, 400)
+
+    flyImg.addEventListener('transitionend', cleanup)
+    window.setTimeout(cleanup, 850)
+  }
+
+  try {
+    if (typeof flyImg.decode === 'function') {
+      flyImg.decode().then(run).catch(run)
+    } else if (flyImg.complete) {
+      run()
+    } else {
+      flyImg.onload = run
+      window.setTimeout(run, 220)
+    }
+  } catch (error) {
+    run()
+  }
+}
+
+const addToCart = async () => {
+  if (addingToCart.value) return
+  if (!userStore.isLoggedIn) {
+    ElMessage.warning('请先登录后再加入购物车')
+    userStore.showLogin()
+    return
+  }
+
+  addingToCart.value = true
+  try {
+    await request.post('/cart/add', {
+      productId: props.product.id,
+      quantity: 1
+    })
+    ElMessage.success('已加入购物车')
+    flyToCart()
+    await userStore.fetchCartCount()
+  } catch (error) {
+    // request.js 会统一展示接口错误，避免这里再重复提示。
+  } finally {
+    addingToCart.value = false
+  }
 }
 
 // 价格格式化
@@ -127,6 +241,12 @@ const priceDecimal = computed(() => {
         background: #FF6B81;
         color: #fff;
         transform: scale(1.1);
+      }
+
+      &:disabled {
+        cursor: not-allowed;
+        opacity: 0.7;
+        transform: none;
       }
     }
   }

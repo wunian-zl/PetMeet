@@ -13,6 +13,11 @@ import java.time.LocalDateTime;
 public class PmsProduct implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    public static final int STATUS_OFF_SHELF = 0;
+    public static final int STATUS_ON_SHELF = 1;
+    public static final int DELETE_VISIBLE = 0;
+    public static final int DELETE_DELETED = 1;
+
     @TableId(type = IdType.AUTO)
     private Long id;
 

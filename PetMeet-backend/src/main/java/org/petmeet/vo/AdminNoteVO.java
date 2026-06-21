@@ -9,75 +9,75 @@ import java.time.LocalDateTime;
  * 管理端笔记视图对象
  */
 @Data
-@Schema(description = "Admin note")
+@Schema(description = "管理端笔记")
 public class AdminNoteVO {
 
-    @Schema(description = "Note id")
+    @Schema(description = "笔记ID")
     private Long id;
 
-    @Schema(description = "Title")
+    @Schema(description = "标题")
     private String title;
 
-    @Schema(description = "Category")
+    @Schema(description = "分类")
     private String category;
 
-    @Schema(description = "Tags (comma separated)")
+    @Schema(description = "标签,逗号分隔")
     private String tags;
 
-    @Schema(description = "Cover image")
+    @Schema(description = "封面图")
     private String cover;
 
-    @Schema(description = "Type: image/video")
+    @Schema(description = "类型:image/video")
     private String type;
 
-    @Schema(description = "Video url")
+    @Schema(description = "视频地址")
     private String videoUrl;
 
-    @Schema(description = "Content")
+    @Schema(description = "内容")
     private String content;
 
-    @Schema(description = "Author user id")
+    @Schema(description = "作者用户ID")
     private Long userId;
 
-    @Schema(description = "Author username")
+    @Schema(description = "作者用户名")
     private String username;
 
-    @Schema(description = "Author nickname")
+    @Schema(description = "作者昵称")
     private String nickname;
 
-    @Schema(description = "Author avatar")
+    @Schema(description = "作者头像")
     private String userAvatar;
 
-    @Schema(description = "Status: 0-pending,1-approved,2-shielded,3-rejected")
+    @Schema(description = "状态:0待审核,1已通过,2已屏蔽,3已拒绝")
     private Integer status;
 
-    @Schema(description = "Sticky")
+    @Schema(description = "是否置顶")
     private Boolean isSticky;
 
-    @Schema(description = "Recommended")
+    @Schema(description = "是否推荐")
     private Boolean isRecommended;
 
-    @Schema(description = "Like count")
+    @Schema(description = "点赞数")
     private Integer likeCount;
 
-    @Schema(description = "Collect count")
+    @Schema(description = "收藏数")
     private Integer collectCount;
 
-    @Schema(description = "Comment count")
+    @Schema(description = "评论数")
     private Integer commentCount;
 
-    @Schema(description = "Create time")
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 
-    @Schema(description = "Audit time")
+    @Schema(description = "审核时间")
     private LocalDateTime auditTime;
 
-    @Schema(description = "Audit operator user id")
+    @Schema(description = "审核人用户ID")
     private Long auditUserId;
 
-    @Schema(description = "Audit operator name")
+    @Schema(description = "审核人名称")
     private String auditUserName;
 
-    @Schema(description = "Reject reason")
+    @Schema(description = "拒绝原因")
     private String rejectReason;
 }

@@ -54,8 +54,13 @@ const routes = [
             },
             {
                 path: 'pay',
-                name: 'PayMock',
-                component: () => import('@/views/PayMock.vue')
+                name: 'Pay',
+                component: () => import('@/views/Pay.vue')
+            },
+            {
+                path: 'pay/result',
+                name: 'PayResult',
+                component: () => import('@/views/PayResult.vue')
             },
             {
                 path: 'profile',

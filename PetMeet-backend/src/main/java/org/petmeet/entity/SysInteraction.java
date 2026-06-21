@@ -21,4 +21,5 @@ public class SysInteraction implements Serializable {
 
     public static final int TYPE_LIKE_NOTE = 1;
     public static final int TYPE_COLLECT_NOTE = 2;
+    public static final int TYPE_LIKE_COMMENT = 3;
 }
