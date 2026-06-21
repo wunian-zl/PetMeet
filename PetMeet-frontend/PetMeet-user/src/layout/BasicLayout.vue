@@ -5,7 +5,7 @@
       <div class="logo-area">
       <!-- 用粉色爪印图标当站点标识 -->
         <div class="logo-icon">
-          <img src="/brand/petmeet-user-mark.svg" alt="PetMeet" />
+          <img src="/brand/petmeet-user-mark.svg?v=square" alt="PetMeet" />
            🐾
         </div>
       </div>
@@ -155,6 +155,7 @@ onMounted(async () => {
           width: 52px;
           height: 52px;
           display: block;
+          object-fit: contain;
         }
         /* 这里去掉过渡效果 */
         
