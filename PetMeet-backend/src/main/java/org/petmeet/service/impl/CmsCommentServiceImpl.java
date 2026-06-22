@@ -43,9 +43,7 @@ public class CmsCommentServiceImpl extends ServiceImpl<CmsCommentMapper, CmsComm
         QueryWrapper<CmsComment> wrapper = new QueryWrapper<>();
         wrapper.eq("note_id", noteId)
                 .isNull("parent_id")
-                .apply("(status = {0} OR (status = {1} AND EXISTS (SELECT 1 FROM cms_comment r WHERE r.parent_id = cms_comment.id AND r.status = {0})))",
-                        CmsComment.STATUS_NORMAL,
-                        CmsComment.STATUS_DELETED)
+                .eq("status", CmsComment.STATUS_NORMAL)
                 .orderByAsc("create_time")
                 .orderByAsc("id");
 
@@ -68,7 +66,9 @@ public class CmsCommentServiceImpl extends ServiceImpl<CmsCommentMapper, CmsComm
     @Override
     public Page<CommentVO> pageReplies(Long parentId, Integer pageNum, Integer pageSize) {
         CmsComment parent = this.getById(parentId);
-        if (parent == null || parent.getParentId() != null) {
+        if (parent == null
+                || parent.getParentId() != null
+                || Integer.valueOf(CmsComment.STATUS_DELETED).equals(parent.getStatus())) {
             throw AppException.notFound("评论不存在");
         }
 
@@ -156,8 +156,22 @@ public class CmsCommentServiceImpl extends ServiceImpl<CmsCommentMapper, CmsComm
             throw AppException.forbidden("无权删除该评论");
         }
 
+        LocalDateTime deleteTime = LocalDateTime.now();
+        if (comment.getParentId() == null) {
+            this.lambdaUpdate()
+                    .eq(CmsComment::getNoteId, comment.getNoteId())
+                    .eq(CmsComment::getStatus, CmsComment.STATUS_NORMAL)
+                    .and(w -> w.eq(CmsComment::getId, comment.getId())
+                            .or()
+                            .eq(CmsComment::getParentId, comment.getId()))
+                    .set(CmsComment::getStatus, CmsComment.STATUS_DELETED)
+                    .set(CmsComment::getDeleteTime, deleteTime)
+                    .update();
+            return;
+        }
+
         comment.setStatus(CmsComment.STATUS_DELETED);
-        comment.setDeleteTime(LocalDateTime.now());
+        comment.setDeleteTime(deleteTime);
         this.updateById(comment);
     }
 
