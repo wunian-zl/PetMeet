@@ -201,16 +201,39 @@ jobs:
 
           sudo chown -R "$USER:$USER" "$stage"
 
+          REMOTE
+
+          rsync -az --delete \
+            --exclude PetMeet-backend.jar \
+            -e "ssh -i ~/.ssh/petmeet_deploy -o BatchMode=yes" \
+            outputs/petmeet-deploy/ \
+            "${{ secrets.PETMEET_SERVER_USER }}@${{ secrets.PETMEET_SERVER_HOST }}:${remote_stage}/"
+
+          if [ -f outputs/petmeet-deploy/PetMeet-backend.jar ]; then
+            ssh -i ~/.ssh/petmeet_deploy \
+              -o BatchMode=yes \
+              "${{ secrets.PETMEET_SERVER_USER }}@${{ secrets.PETMEET_SERVER_HOST }}" \
+              "PETMEET_STAGE='$remote_stage' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          stage="$PETMEET_STAGE"
+          sudo -n true
           if [ ! -f "$stage/PetMeet-backend.jar" ] && [ -f /opt/petmeet/PetMeet-backend.jar ]; then
             sudo cp /opt/petmeet/PetMeet-backend.jar "$stage/PetMeet-backend.jar"
             sudo chown "$USER:$USER" "$stage/PetMeet-backend.jar"
           fi
           REMOTE
 
-          rsync -az --delete \
-            -e "ssh -i ~/.ssh/petmeet_deploy -o BatchMode=yes" \
-            outputs/petmeet-deploy/ \
-            "${{ secrets.PETMEET_SERVER_USER }}@${{ secrets.PETMEET_SERVER_HOST }}:${remote_stage}/"
+            rsync -az --inplace --no-whole-file \
+              -e "ssh -i ~/.ssh/petmeet_deploy -o BatchMode=yes" \
+              outputs/petmeet-deploy/PetMeet-backend.jar \
+              "${{ secrets.PETMEET_SERVER_USER }}@${{ secrets.PETMEET_SERVER_HOST }}:${remote_stage}/PetMeet-backend.jar"
+          else
+            ssh -i ~/.ssh/petmeet_deploy \
+              -o BatchMode=yes \
+              "${{ secrets.PETMEET_SERVER_USER }}@${{ secrets.PETMEET_SERVER_HOST }}" \
+              "rm -f '${remote_stage}/PetMeet-backend.jar'"
+          fi
 
       - name: Deploy on server
         run: |
