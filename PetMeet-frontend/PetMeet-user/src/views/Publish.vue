@@ -1,6 +1,13 @@
 ﻿<template>
   <div class="publish-page">
-    <div class="publish-container">
+    <AuthRequiredState
+      v-if="!userStore.isLoggedIn"
+      type="publish"
+      title="登录后发布笔记"
+      description="登录后可以上传图片或视频，关联商品，并把宠物生活记录发布到社区。"
+    />
+    <template v-else>
+      <div class="publish-container">
       <div class="publish-header">
         <div class="header-main">
           <h2 class="page-title">发布笔记</h2>
@@ -250,6 +257,7 @@
     <el-dialog v-model="previewVisible" align-center>
       <img :src="previewImageUrl" style="width: 100%; border-radius: 12px;" />
     </el-dialog>
+    </template>
   </div>
 </template>
 
@@ -261,6 +269,7 @@ import request from '@/utils/request'
 import { useUserStore } from '@/store/user'
 import { ElMessage } from 'element-plus'
 import { getImageUrl } from '@/utils/image'
+import AuthRequiredState from '@/components/AuthRequiredState.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -604,9 +613,23 @@ const markOrderSeedNotePublished = () => {
 }
 
 onMounted(() => {
-  preselectProducts()
   prefillTagsFromQuery()
-  fetchProducts(true)
+  if (userStore.isLoggedIn) {
+    preselectProducts()
+    fetchProducts(true)
+  }
+})
+
+watch(() => userStore.token, (token) => {
+  if (token) {
+    preselectProducts()
+    fetchProducts(true)
+  } else {
+    selectedProducts.value = []
+    productList.value = []
+    productHasMore.value = true
+    productPage.value = 1
+  }
 })
 
 watch(() => form.type, (type) => {
@@ -640,6 +663,11 @@ watch(coverMode, (mode) => {
 
 // 发布笔记
 const handlePublish = async () => {
+  if (!userStore.isLoggedIn) {
+    ElMessage.warning('请先登录后继续操作')
+    userStore.showLogin()
+    return
+  }
   if (!form.title.trim() || !form.content.trim()) {
     ElMessage.warning('请填写标题和正文')
     return

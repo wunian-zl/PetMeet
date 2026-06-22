@@ -1,5 +1,12 @@
 ﻿<template>
   <div class="profile-page">
+    <AuthRequiredState
+      v-if="!userStore.isLoggedIn"
+      type="profile"
+      title="登录后进入个人中心"
+      description="你的资料、订单、收藏、地址和互动记录会在登录后展示。"
+    />
+    <template v-else>
   <!-- 头部区域 -->
     <div class="profile-header">
       <div class="profile-banner">
@@ -811,6 +818,7 @@
           <el-image :src="displayAvatar" fit="contain" />
         </div>
       </el-dialog>
+    </template>
   </div>
 </template>
 
@@ -828,6 +836,7 @@ import {
   Document, Goods, Location, ArrowRight, User, LocationInformation, MoreFilled
 } from '@element-plus/icons-vue'
 import HeartIcon from '@/components/HeartIcon.vue'
+import AuthRequiredState from '@/components/AuthRequiredState.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -1934,6 +1943,7 @@ const switchToAfterSaleRecords = () => {
 
 watch(orderSubTab, (val) => {
   syncSelectedOrderIds()
+  if (!userStore.isLoggedIn) return
   if (val === 'after_sale') {
     const targetAfterSaleTab = normalizeAfterSaleTab(route.query.afterSaleTab)
     if (targetAfterSaleTab) {
@@ -2066,8 +2076,31 @@ const handleSaveAddress = async () => {
   })
 }
 
+const resetProfileData = () => {
+    myNotes.value = []
+    collectedNotes.value = []
+    likedNotes.value = []
+    orderList.value = []
+    afterSaleList.value = []
+    addressList.value = []
+    selectedOrderIds.value = []
+    afterSaleUnreadCount.value = 0
+    followStats.followers = 0
+    followStats.following = 0
+    loadingNotes.value = false
+    loadingCollected.value = false
+    loadingLiked.value = false
+    loadingOrders.value = false
+    loadingAfterSale.value = false
+    loadingAddress.value = false
+}
+
 // 切换标签页时，按需加载对应数据
 const loadTab = (tab) => {
+    if (!userStore.isLoggedIn) {
+        resetProfileData()
+        return
+    }
     if (tab === 'notes') getMyNotes()
     else if (tab === 'collections') getCollectedNotes()
     else if (tab === 'likes') getLikedNotes()
@@ -2135,13 +2168,31 @@ watch(() => route.query.afterSaleTab, (tab) => {
 })
 
 watch(() => route.query.orderId, (orderId) => {
+    if (!userStore.isLoggedIn) return
     if (!orderId) return
     openOrderDetailFromRoute(orderId)
 })
 
 watch(() => route.query.refresh, async (refresh) => {
+    if (!userStore.isLoggedIn) return
     if (!refresh) return
     await refreshOrdersAfterExternalChange()
+})
+
+watch(() => userStore.token, async (token) => {
+    if (!token) {
+      resetProfileData()
+      return
+    }
+    if (!userStore.userInfo?.id) {
+      try {
+        await userStore.getUserInfo()
+      } catch (e) {}
+    }
+    userStore.fetchUnpaidOrderCount()
+    refreshAfterSaleUnreadCount()
+    loadTab(activeTab.value)
+    loadFollowStats()
 })
 
 let hasActivatedOnce = false
@@ -2183,7 +2234,7 @@ onMounted(async () => {
     })
     loadTab(activeTab.value)
     loadFollowStats()
-    if (route.query?.orderId) {
+    if (userStore.isLoggedIn && route.query?.orderId) {
       await openOrderDetailFromRoute(route.query.orderId)
     }
 })

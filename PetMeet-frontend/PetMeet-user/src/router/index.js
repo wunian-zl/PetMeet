@@ -144,6 +144,7 @@ wrapNavigationMethod('replace')
 
 // 白名单路由
 const whiteList = ['/login', '/', '/shop', '/mall/list']
+const directAuthRenderList = ['/cart', '/publish', '/profile']
 
 // 前端路由守卫
 router.beforeEach((to, from, next) => {
@@ -161,12 +162,17 @@ router.beforeEach((to, from, next) => {
         || to.path.startsWith('/note/detail/')
         || to.path.startsWith('/product/')
         || to.path === '/'
+    const isDirectAuthEntry = from.matched.length === 0 && directAuthRenderList.includes(to.path)
 
-    if (isWhiteList || token) {
+    if (isWhiteList || token || isDirectAuthEntry) {
         // 已登录用户再访问登录页时，直接回首页
         if (to.path === '/login' && token) {
             next('/')
         } else {
+            if (!token && isDirectAuthEntry) {
+                ElMessage.warning('请先登录后继续操作')
+                userStore.showLogin()
+            }
             next()
         }
     } else {

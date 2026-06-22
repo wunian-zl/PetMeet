@@ -1,19 +1,26 @@
 <template>
   <div class="cart-container">
-    <div class="cart-header">
-      <h2>我的购物车</h2>
-      <div v-if="cartList.length" class="cart-sub">共 {{ cartList.length }} 件宝贝</div>
-    </div>
+    <AuthRequiredState
+      v-if="!userStore.isLoggedIn"
+      type="cart"
+      title="登录后查看购物车"
+      description="你的商品、数量和结算信息会在登录后同步展示。"
+    />
+    <template v-else>
+      <div class="cart-header">
+        <h2>我的购物车</h2>
+        <div v-if="cartList.length" class="cart-sub">共 {{ cartList.length }} 件宝贝</div>
+      </div>
 
   <!-- 空状态 -->
-    <div v-if="!loading && cartList.length === 0" class="empty-cart">
-      <el-empty description="购物车还是空的，去逛逛吧~">
-        <el-button type="primary" class="go-shop-btn" @click="router.push('/shop')">去商城逛逛</el-button>
-      </el-empty>
-    </div>
+      <div v-if="!loading && cartList.length === 0" class="empty-cart">
+        <el-empty description="购物车还是空的，去逛逛吧~">
+          <el-button type="primary" class="go-shop-btn" @click="router.push('/shop')">去商城逛逛</el-button>
+        </el-empty>
+      </div>
 
   <!-- 双栏布局 -->
-    <div v-else class="cart-wrapper">
+      <div v-else class="cart-wrapper">
     <!-- 左侧：商品列表 -->
       <div class="cart-main">
         <el-table 
@@ -121,17 +128,19 @@
           </div>
         </div>
       </aside>
-    </div>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import request from '@/utils/request'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Minus, Plus } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
+import AuthRequiredState from '@/components/AuthRequiredState.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -149,6 +158,11 @@ const openProduct = (row) => {
 
 // 拉取购物车
 const getCartList = async () => {
+  if (!userStore.isLoggedIn) {
+    cartList.value = []
+    loading.value = false
+    return
+  }
   loading.value = true
   try {
     const res = await request.get('/cart/list')
@@ -214,7 +228,18 @@ const openCheckout = async () => {
 }
 
 onMounted(() => {
-  getCartList()
+  if (userStore.isLoggedIn) {
+    getCartList()
+  }
+})
+
+watch(() => userStore.token, (token) => {
+  if (token) {
+    getCartList()
+  } else {
+    cartList.value = []
+    loading.value = false
+  }
 })
 </script>
 
