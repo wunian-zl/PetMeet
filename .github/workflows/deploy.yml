@@ -7,6 +7,15 @@ on:
         description: Type deploy to deploy to the production server.
         required: true
         type: string
+      backend:
+        description: Build and upload backend jar.
+        required: false
+        default: auto
+        type: choice
+        options:
+          - auto
+          - always
+          - never
 
 concurrency:
   group: petmeet-production-deploy
@@ -21,8 +30,50 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect backend changes
+        id: backend_changes
+        run: |
+          set -euo pipefail
+
+          mode="${{ inputs.backend }}"
+          case "$mode" in
+            always)
+              build_backend=true
+              reason="manual override"
+              ;;
+            never)
+              build_backend=false
+              reason="manual override"
+              ;;
+            auto)
+              if git rev-parse HEAD^ >/dev/null 2>&1 \
+                && git diff --quiet HEAD^ HEAD -- \
+                  PetMeet-backend/pom.xml \
+                  PetMeet-backend/mvnw \
+                  PetMeet-backend/mvnw.cmd \
+                  PetMeet-backend/.mvn \
+                  PetMeet-backend/src; then
+                build_backend=false
+                reason="no backend code changes"
+              else
+                build_backend=true
+                reason="backend code changed or previous commit unavailable"
+              fi
+              ;;
+            *)
+              echo "Unsupported backend mode: $mode"
+              exit 1
+              ;;
+          esac
+
+          echo "build=$build_backend" >> "$GITHUB_OUTPUT"
+          echo "Backend build: $build_backend ($reason)"
 
       - name: Set up Java
+        if: ${{ steps.backend_changes.outputs.build == 'true' }}
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -39,6 +90,7 @@ jobs:
             PetMeet-frontend/PetMeet-admin/package-lock.json
 
       - name: Build backend
+        if: ${{ steps.backend_changes.outputs.build == 'true' }}
         working-directory: PetMeet-backend
         run: |
           chmod +x mvnw
@@ -59,39 +111,42 @@ jobs:
           npm run build
 
       - name: Create deploy bundle
+        env:
+          BUILD_BACKEND: ${{ steps.backend_changes.outputs.build }}
         run: |
           set -euo pipefail
 
           output_dir="outputs/petmeet-deploy"
-          zip_path="outputs/petmeet-deploy.zip"
 
           rm -rf outputs
           mkdir -p "$output_dir/frontend" "$output_dir/uploads"
 
-          jar_path="$(find PetMeet-backend/target -maxdepth 1 -type f -name '*.jar' ! -name '*sources*' ! -name '*javadoc*' | sort | head -n 1)"
-          if [ -z "$jar_path" ]; then
-            echo "Backend jar not found under PetMeet-backend/target."
-            exit 1
+          if [ "$BUILD_BACKEND" = "true" ]; then
+            jar_path="$(find PetMeet-backend/target -maxdepth 1 -type f -name '*.jar' ! -name '*sources*' ! -name '*javadoc*' | sort | head -n 1)"
+            if [ -z "$jar_path" ]; then
+              echo "Backend jar not found under PetMeet-backend/target."
+              exit 1
+            fi
+            cp "$jar_path" "$output_dir/PetMeet-backend.jar"
+          else
+            echo "Skipping backend jar in deploy bundle."
           fi
 
-          cp "$jar_path" "$output_dir/PetMeet-backend.jar"
           cp -R PetMeet-backend/sql "$output_dir/sql"
           cp -R deploy "$output_dir/deploy"
           cp -R uploads/demo "$output_dir/uploads/demo"
           cp -R PetMeet-frontend/PetMeet-user/dist "$output_dir/frontend/user"
           cp -R PetMeet-frontend/PetMeet-admin/dist "$output_dir/frontend/admin"
 
-          cd "$output_dir"
-          zip -r "../petmeet-deploy.zip" .
-          cd -
-
-          test -f "$zip_path"
+          test -d "$output_dir/frontend/user"
+          test -d "$output_dir/frontend/admin"
+          test -d "$output_dir/uploads/demo"
 
       - name: Upload deploy bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: petmeet-deploy-zip
-          path: outputs/petmeet-deploy.zip
+          name: petmeet-deploy-bundle
+          path: outputs/petmeet-deploy
           if-no-files-found: error
           retention-days: 7
 
@@ -106,25 +161,65 @@ jobs:
       - name: Upload bundle to server
         run: |
           set -euo pipefail
-          scp -i ~/.ssh/petmeet_deploy \
-            -o BatchMode=yes \
-            outputs/petmeet-deploy.zip \
-            "${{ secrets.PETMEET_SERVER_USER }}@${{ secrets.PETMEET_SERVER_HOST }}:/tmp/petmeet-deploy-${GITHUB_RUN_ID}.zip"
-
-      - name: Deploy on server
-        run: |
-          set -euo pipefail
-          remote_bundle="/tmp/petmeet-deploy-${GITHUB_RUN_ID}.zip"
+          remote_stage="/tmp/petmeet-deploy-stage"
 
           ssh -i ~/.ssh/petmeet_deploy \
             -o BatchMode=yes \
             "${{ secrets.PETMEET_SERVER_USER }}@${{ secrets.PETMEET_SERVER_HOST }}" \
-            "PETMEET_BUNDLE='$remote_bundle' PETMEET_RUN_ID='$GITHUB_RUN_ID' bash -s" <<'REMOTE'
+            "PETMEET_STAGE='$remote_stage' bash -s" <<'REMOTE'
           set -euo pipefail
 
-          bundle="$PETMEET_BUNDLE"
+          stage="$PETMEET_STAGE"
+          sudo -n true
+
+          if [ ! -d "$stage" ]; then
+            mkdir -p "$stage/frontend" "$stage/uploads"
+
+            if [ -d /var/www/petmeet/user ]; then
+              mkdir -p "$stage/frontend/user"
+              sudo rsync -a /var/www/petmeet/user/ "$stage/frontend/user/"
+            fi
+            if [ -d /var/www/petmeet/admin ]; then
+              mkdir -p "$stage/frontend/admin"
+              sudo rsync -a /var/www/petmeet/admin/ "$stage/frontend/admin/"
+            fi
+            if [ -d /opt/petmeet/sql ]; then
+              mkdir -p "$stage/sql"
+              sudo rsync -a /opt/petmeet/sql/ "$stage/sql/"
+            fi
+            if [ -d /opt/petmeet/uploads/demo ]; then
+              mkdir -p "$stage/uploads/demo"
+              sudo rsync -a /opt/petmeet/uploads/demo/ "$stage/uploads/demo/"
+            fi
+            if [ -d /opt/petmeet/deploy ]; then
+              mkdir -p "$stage/deploy"
+              sudo rsync -a /opt/petmeet/deploy/ "$stage/deploy/"
+            fi
+
+            sudo chown -R "$USER:$USER" "$stage"
+          fi
+
+          sudo chown -R "$USER:$USER" "$stage"
+          REMOTE
+
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/petmeet_deploy -o BatchMode=yes" \
+            outputs/petmeet-deploy/ \
+            "${{ secrets.PETMEET_SERVER_USER }}@${{ secrets.PETMEET_SERVER_HOST }}:${remote_stage}/"
+
+      - name: Deploy on server
+        run: |
+          set -euo pipefail
+          remote_stage="/tmp/petmeet-deploy-stage"
+
+          ssh -i ~/.ssh/petmeet_deploy \
+            -o BatchMode=yes \
+            "${{ secrets.PETMEET_SERVER_USER }}@${{ secrets.PETMEET_SERVER_HOST }}" \
+            "PETMEET_RELEASE='$remote_stage' PETMEET_RUN_ID='$GITHUB_RUN_ID' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          release_dir="$PETMEET_RELEASE"
           run_id="$PETMEET_RUN_ID"
-          release_dir="/tmp/petmeet-deploy-${run_id}"
           backup_dir="/opt/petmeet/backups/$(date +%Y%m%d%H%M%S)-${run_id}"
 
           rollback() {
@@ -154,19 +249,18 @@ jobs:
             exit 1
           }
 
-          test -f "$bundle"
           sudo -n true
 
-          rm -rf "$release_dir"
-          mkdir -p "$release_dir"
-          unzip -q "$bundle" -d "$release_dir"
-
-          test -f "$release_dir/PetMeet-backend.jar"
           test -d "$release_dir/frontend/user"
           test -d "$release_dir/frontend/admin"
           test -d "$release_dir/deploy"
           test -d "$release_dir/sql"
           test -d "$release_dir/uploads/demo"
+
+          backend_changed=0
+          if [ -f "$release_dir/PetMeet-backend.jar" ]; then
+            backend_changed=1
+          fi
 
           sudo mkdir -p "$backup_dir/frontend" "$backup_dir/uploads"
           if [ -f /opt/petmeet/PetMeet-backend.jar ]; then
@@ -187,7 +281,11 @@ jobs:
 
           trap rollback ERR
 
-          sudo cp "$release_dir/PetMeet-backend.jar" /opt/petmeet/PetMeet-backend.jar
+          if [ "$backend_changed" = "1" ]; then
+            sudo cp "$release_dir/PetMeet-backend.jar" /opt/petmeet/PetMeet-backend.jar
+          else
+            echo "No backend jar in release; keeping existing backend."
+          fi
           sudo rm -rf /opt/petmeet/sql
           sudo cp -R "$release_dir/sql" /opt/petmeet/sql
 
@@ -197,7 +295,9 @@ jobs:
           sudo rsync -a --delete "$release_dir/frontend/admin/" /var/www/petmeet/admin/
           sudo chown -R petmeet:petmeet /opt/petmeet
 
-          sudo systemctl restart petmeet-backend
+          if [ "$backend_changed" = "1" ]; then
+            sudo systemctl restart petmeet-backend
+          fi
 
           backend_ready=0
           for i in $(seq 1 45); do
