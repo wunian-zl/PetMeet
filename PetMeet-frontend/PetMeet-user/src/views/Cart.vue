@@ -8,7 +8,7 @@
   <!-- 空状态 -->
     <div v-if="!loading && cartList.length === 0" class="empty-cart">
       <el-empty description="购物车还是空的，去逛逛吧~">
-        <el-button type="primary" class="go-home-btn" @click="router.push('/')">去首页看看</el-button>
+        <el-button type="primary" class="go-shop-btn" @click="router.push('/shop')">去商城逛逛</el-button>
       </el-empty>
     </div>
 
@@ -263,7 +263,7 @@ onMounted(() => {
   justify-content: center;
   box-shadow: 0 4px 20px rgba(0,0,0,0.03);
   
-  .go-home-btn {
+  .go-shop-btn {
     border-radius: 20px;
     padding: 10px 30px;
   }

@@ -14,10 +14,26 @@
       </div>
     <!-- 右侧图标（通知/购物车） -->
       <div class="header-actions">
-        <div class="action-item">
+        <div
+          class="action-item"
+          role="button"
+          tabindex="0"
+          aria-label="查看通知"
+          @click="goNotification"
+          @keydown.enter="goNotification"
+          @keydown.space.prevent="goNotification"
+        >
           <el-icon :size="22"><Bell /></el-icon>
         </div>
-        <div class="action-item" @click="router.push('/cart')">
+        <div
+          class="action-item"
+          role="button"
+          tabindex="0"
+          aria-label="查看购物车"
+          @click="goCart"
+          @keydown.enter="goCart"
+          @keydown.space.prevent="goCart"
+        >
           <el-icon :size="22"><ShoppingCart /></el-icon>
         </div>
       </div>
@@ -151,6 +167,14 @@ const searchKeyword = ref('')
 const handleSearch = () => {
   if (!searchKeyword.value.trim()) return
   router.push({ path: '/mall/list', query: { keyword: searchKeyword.value } })
+}
+
+const goNotification = () => {
+  router.push('/notification')
+}
+
+const goCart = () => {
+  router.push('/cart')
 }
 
 // 默认分类图标映射
@@ -529,6 +553,11 @@ onUnmounted(() => {
     cursor: pointer;
     color: #333;
     transition: all 0.2s;
+
+    &:focus-visible {
+      outline: 2px solid rgba(255, 107, 129, 0.4);
+      outline-offset: 3px;
+    }
     
     &:hover {
       background: #fff;

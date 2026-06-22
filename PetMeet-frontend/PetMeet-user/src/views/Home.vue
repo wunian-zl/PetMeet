@@ -863,9 +863,7 @@ watch(
       position: absolute;
       left: 14px;
       border-radius: 999px;
-      background: linear-gradient(90deg, #f3f3f3 0%, #ffecef 48%, #f3f3f3 100%);
-      background-size: 220% 100%;
-      animation: coverShimmer 1.2s ease-in-out infinite;
+      background: #eceae4;
     }
 
     .card-body::before {
@@ -895,7 +893,7 @@ watch(
     width: 100%;
     aspect-ratio: var(--cover-ratio, 4 / 5);
     overflow: hidden;
-    background: #f7f7f7;
+    background: #f2f1ee;
     
     img {
       width: 100%;
@@ -910,11 +908,35 @@ watch(
     .cover-placeholder {
       position: absolute;
       inset: 0;
-      background: linear-gradient(105deg, #f7f7f7 0%, #fff1f4 45%, #f7f7f7 80%);
-      background-size: 220% 100%;
-      animation: coverShimmer 1.2s ease-in-out infinite;
+      background: #f2f1ee;
       pointer-events: none;
       z-index: 1;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 42px;
+        height: 42px;
+        transform: translate(-50%, -50%);
+        border: 2px solid #d5d2ca;
+        border-radius: 16px;
+        opacity: 0.65;
+      }
+
+      &::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 16px;
+        height: 16px;
+        transform: translate(-50%, -46%) rotate(45deg);
+        border-right: 2px solid #d5d2ca;
+        border-bottom: 2px solid #d5d2ca;
+        opacity: 0.65;
+      }
     }
     
     .shop-tag {
@@ -1008,15 +1030,6 @@ watch(
         &:hover { color: #FF6B81; } // Pink Heart Hover
       }
     }
-  }
-}
-
-@keyframes coverShimmer {
-  0% {
-    background-position: 160% 0;
-  }
-  100% {
-    background-position: -60% 0;
   }
 }
 

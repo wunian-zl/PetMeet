@@ -12,6 +12,8 @@ const normalizeBaseUrl = (value) => {
 
 const BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_ORIGIN)
 
+const DEFAULT_IMAGE_PLACEHOLDER = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22375%22 viewBox=%220 0 300 375%22%3E%3Crect width=%22300%22 height=%22375%22 fill=%22%23f2f1ee%22/%3E%3Cg fill=%22none%22 stroke=%22%23c9c6bf%22 stroke-width=%228%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 opacity=%220.9%22%3E%3Cpath d=%22M103 201c10-28 35-47 58-47s48 19 58 47%22/%3E%3Cpath d=%22M113 218c24 18 72 18 96 0%22/%3E%3Ccircle cx=%22118%22 cy=%22130%22 r=%2213%22 fill=%22%23c9c6bf%22 stroke=%22none%22/%3E%3Ccircle cx=%22155%22 cy=%22112%22 r=%2215%22 fill=%22%23c9c6bf%22 stroke=%22none%22/%3E%3Ccircle cx=%22192%22 cy=%22130%22 r=%2213%22 fill=%22%23c9c6bf%22 stroke=%22none%22/%3E%3C/g%3E%3C/svg%3E'
+
 /**
  * 处理图片 URL，确保路径正确
  * - 如果是完整 URL (http/https)，直接返回
@@ -21,7 +23,7 @@ const BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_ORIGIN)
  * @param {string} placeholder - 默认占位图
  * @returns {string} 处理后的完整 URL
  */
-export const getImageUrl = (url, placeholder = 'https://picsum.photos/300/300') => {
+export const getImageUrl = (url, placeholder = DEFAULT_IMAGE_PLACEHOLDER) => {
     if (!url) {
         return placeholder
     }

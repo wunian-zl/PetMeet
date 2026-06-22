@@ -7,11 +7,11 @@
           <p class="page-subtitle">记录你和宠物的每个高光瞬间，真实分享更容易被看见。</p>
         </div>
         <div class="header-stats">
-          <div class="stat-pill media-pill">
+          <div class="stat-pill media-pill" aria-label="已选素材数量">
             <span class="label">素材</span>
             <strong>{{ mediaCountLabel }}</strong>
           </div>
-          <div class="stat-pill product-pill">
+          <div class="stat-pill product-pill" aria-label="已关联商品数量">
             <span class="label">关联商品</span>
             <strong>{{ selectedProducts.length }}</strong>
           </div>
@@ -735,54 +735,65 @@ const handlePublish = async () => {
 
 .header-stats {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
 }
 
 .stat-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 10px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  color: var(--love-text-soft);
+  gap: 7px;
+  min-width: 88px;
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid rgba(91, 67, 73, 0.09);
+  background: #fff;
+  color: #6d5960;
+  box-shadow: 0 1px 0 rgba(91, 67, 73, 0.025);
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    background: var(--stat-accent);
+    box-shadow: 0 0 0 3px var(--stat-tint);
+  }
+
+  &:hover {
+    border-color: rgba(91, 67, 73, 0.14);
+    background: #fffdfc;
+    box-shadow: 0 4px 12px rgba(91, 67, 73, 0.06);
+  }
   
   .label {
-    font-size: 14px;
-    color: var(--love-text-soft);
+    font-size: 13px;
+    line-height: 1;
+    color: #7f6870;
+    font-weight: 500;
   }
   strong {
-    font-size: 15px;
-    color: #4f5568;
-    font-weight: 600;
+    margin-left: auto;
+    font-size: 16px;
+    line-height: 1;
+    color: #43363a;
+    font-weight: 700;
   }
 }
 
 .media-pill {
-  background: linear-gradient(135deg, #e8f4ff 0%, #f2f9ff 100%);
-  border-color: #c8def8;
-
-  .label {
-    color: #4e759c;
-  }
-
-  strong {
-    color: #2f5f8f;
-  }
+  --stat-accent: #7fa4bd;
+  --stat-tint: rgba(127, 164, 189, 0.16);
 }
 
 .product-pill {
-  background: linear-gradient(135deg, #e8f4ff 0%, #f2f9ff 100%);
-  border-color: #c8def8;
-
-  .label {
-    color: #4e759c;
-  }
-
-  strong {
-    color: #2f5f8f;
-  }
+  --stat-accent: #5ca89a;
+  --stat-tint: rgba(92, 168, 154, 0.14);
 }
 
 .page-title {
@@ -1344,6 +1355,13 @@ const handlePublish = async () => {
   }
   .page-title {
     font-size: 20px;
+  }
+  .header-stats {
+    width: 100%;
+  }
+  .stat-pill {
+    flex: 1;
+    min-width: 0;
   }
   .form-actions .publish-btn {
     width: 100%;
