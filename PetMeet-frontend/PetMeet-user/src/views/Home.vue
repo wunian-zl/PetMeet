@@ -60,8 +60,10 @@
               <div class="card-cover" :style="{ '--cover-ratio': note.coverRatio || DEFAULT_COVER_RATIO }">
                 <img
                   :src="note.coverImg"
+                  :data-note-id="note.id"
                   alt="cover"
-                  loading="lazy"
+                  :loading="note.coverPriority ? 'eager' : 'lazy'"
+                  :fetchpriority="note.coverPriority ? 'high' : 'auto'"
                   decoding="async"
                   @load="handleNoteCoverLoad($event, note)"
                   @error="handleNoteCoverError($event, note)"
@@ -182,6 +184,7 @@ const isNearBottom = ref(false)
 const loadMoreSentinel = ref(null)
 let loadMoreObserver = null
 let closeDetailTimer = null
+let coverCompletionTimer = null
 
 // 详情弹窗状态
 const showDetail = ref(false)
@@ -319,7 +322,8 @@ const fetchNotes = async (append = false) => {
         pageSize: pageSize.value,
         keyword: searchKeyword.value ? searchKeyword.value.trim() : undefined,
         category: activeCategory.value === "recommend" ? undefined : activeCategory.value,
-        tag: activeTag.value || undefined
+        tag: activeTag.value || undefined,
+        recommended: activeCategory.value === "recommend" ? true : undefined
       }
     })
     
@@ -328,11 +332,14 @@ const fetchNotes = async (append = false) => {
       total.value = res.total || records.length
       
       // 映射字段并处理图片 URL
-      const mappedNotes = records.map(note => ({
+      const baseIndex = append ? noteList.value.length : 0
+      const priorityLimit = Math.max(8, calculateColCount() * 2)
+      const mappedNotes = records.map((note, index) => ({
         ...note,
         coverImgRaw: note.coverImg || '',
         coverThumbRaw: note.coverThumb || '',
         coverImg: getImageUrl(note.coverThumb || note.coverImg),
+        coverPriority: baseIndex + index < priorityLimit,
         coverRatio: toCoverRatio(note.coverWidth || note.imageWidth, note.coverHeight || note.imageHeight),
         coverLoaded: false,
         coverFailed: false,
@@ -370,6 +377,7 @@ const fetchNotes = async (append = false) => {
         noteList.value = finalNotes
         resetWaterfall(finalNotes)
       }
+      scheduleCoverCompletionCheck()
       
       // 检查是否还有更多
       hasMore.value = noteList.value.length < total.value
@@ -479,6 +487,39 @@ const setupLoadMoreObserver = () => {
     }
   )
   loadMoreObserver.observe(loadMoreSentinel.value)
+}
+
+const findNoteById = (id) => {
+  if (!id) return null
+  return noteList.value.find((item) => String(item?.id) === String(id)) || null
+}
+
+const markCompletedCoverImage = (img) => {
+  if (!img || !img.complete) return
+  const note = findNoteById(img.dataset.noteId)
+  if (!note || note.coverLoaded || note.coverFailed) return
+  if (img.naturalWidth > 0) {
+    handleNoteCoverLoad({ target: img }, note)
+  } else {
+    handleNoteCoverError({ target: img }, note)
+  }
+}
+
+const scanCompletedCoverImages = () => {
+  document
+    .querySelectorAll('.note-card .card-cover img[data-note-id]')
+    .forEach(markCompletedCoverImage)
+}
+
+const scheduleCoverCompletionCheck = () => {
+  if (coverCompletionTimer) {
+    clearTimeout(coverCompletionTimer)
+    coverCompletionTimer = null
+  }
+  nextTick(() => {
+    scanCompletedCoverImages()
+    coverCompletionTimer = setTimeout(scanCompletedCoverImages, 800)
+  })
 }
 
 const handleNoteCoverError = (event, note) => {
@@ -606,6 +647,10 @@ onUnmounted(() => {
   if (closeDetailTimer) {
     clearTimeout(closeDetailTimer)
     closeDetailTimer = null
+  }
+  if (coverCompletionTimer) {
+    clearTimeout(coverCompletionTimer)
+    coverCompletionTimer = null
   }
   window.removeEventListener('scroll', handleScroll)
   window.removeEventListener('popstate', handlePopState)

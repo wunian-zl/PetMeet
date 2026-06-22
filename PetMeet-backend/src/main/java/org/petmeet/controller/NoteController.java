@@ -55,9 +55,10 @@ public class NoteController {
             @Parameter(description = "Keyword") @RequestParam(required = false) String keyword,
             @Parameter(description = "Product id") @RequestParam(required = false) Long productId,
             @Parameter(description = "Category") @RequestParam(required = false) String category,
-            @Parameter(description = "Tags (comma separated)") @RequestParam(required = false) String tag) {
+            @Parameter(description = "Tags (comma separated)") @RequestParam(required = false) String tag,
+            @Parameter(description = "Recommended only") @RequestParam(required = false) Boolean recommended) {
         // 查询前台笔记列表
-        return Result.success(cmsNoteService.pageList(pageNum, pageSize, keyword, productId, category, tag));
+        return Result.success(cmsNoteService.pageList(pageNum, pageSize, keyword, productId, category, tag, recommended));
     }
 
     /**

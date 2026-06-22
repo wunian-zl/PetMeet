@@ -30,7 +30,7 @@ public class NoteRedisSupport {
 
     public static final String NOTE_LIKE_DIRTY_SET_KEY = "note:like:dirty";
 
-    public String buildNoteListCacheKey(Integer pageNum, Integer pageSize, String keyword, Long productId, String category, String tag) {
+    public String buildNoteListCacheKey(Integer pageNum, Integer pageSize, String keyword, Long productId, String category, String tag, Boolean recommended) {
         long ver = getNoteListCacheVersion();
         String payload = String.join("|",
                 "v=" + ver,
@@ -39,7 +39,8 @@ public class NoteRedisSupport {
                 "kw=" + normalize(keyword),
                 "pid=" + (productId == null ? "" : productId.toString()),
                 "cat=" + normalize(category),
-                "tag=" + normalize(tag));
+                "tag=" + normalize(tag),
+                "rec=" + (Boolean.TRUE.equals(recommended) ? "1" : "0"));
         String md5 = DigestUtils.md5DigestAsHex(payload.getBytes(StandardCharsets.UTF_8));
         return NOTE_LIST_CACHE_PREFIX + md5;
     }

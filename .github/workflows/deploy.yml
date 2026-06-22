@@ -200,6 +200,11 @@ jobs:
           fi
 
           sudo chown -R "$USER:$USER" "$stage"
+
+          if [ ! -f "$stage/PetMeet-backend.jar" ] && [ -f /opt/petmeet/PetMeet-backend.jar ]; then
+            sudo cp /opt/petmeet/PetMeet-backend.jar "$stage/PetMeet-backend.jar"
+            sudo chown "$USER:$USER" "$stage/PetMeet-backend.jar"
+          fi
           REMOTE
 
           rsync -az --delete \
