@@ -12,7 +12,7 @@ public interface CmsNoteService extends IService<CmsNote> {
 
     NoteDetailVO getDetail(Long noteId);
 
-    Page<NoteListVO> pageList(Integer pageNum, Integer pageSize, String keyword, Long productId, String category, String tag);
+    Page<NoteListVO> pageList(Integer pageNum, Integer pageSize, String keyword, Long productId, String category, Boolean recommended, String tag);
 
     Page<NoteListVO> pageMyNotes(Integer pageNum, Integer pageSize);
 

@@ -164,7 +164,7 @@ const userStore = useUserStore()
 const noteList = ref([])
 const waterfallCols = ref([[], [], [], []]) // Default 4 cols
 const loading = ref(false)
-const activeCategory = ref('recommend')
+const activeCategory = ref('all')
 const activeTag = ref('')
 const searchKeyword = ref('')
 const searchLocked = computed(() => !userStore.isLoggedIn)
@@ -190,11 +190,12 @@ const currentNote = ref(null)
 const originRect = ref(null)
 
 const categories = [
+  { label: '全部', key: 'all' },
   { label: '推荐', key: 'recommend' },
-  { label: '猫咪日常', key: 'cat' },
-  { label: '狗狗生活', key: 'dog' },
-  { label: '异宠日常', key: 'other' },
-  { label: '科普知识', key: 'knowledge' }
+  { label: '猫咪', key: 'cat' },
+  { label: '狗狗', key: 'dog' },
+  { label: '异宠', key: 'other' },
+  { label: '科普', key: 'knowledge' }
 ]
 
 const tagOptions = [
@@ -313,12 +314,17 @@ const fetchNotes = async (append = false) => {
   let loadedCount = 0
   loading.value = true
   try {
+    const isRecommendedScope = activeCategory.value === 'recommend'
+    const category = activeCategory.value === 'all' || isRecommendedScope
+      ? undefined
+      : activeCategory.value
     const res = await request.get('/note/list', {
       params: {
         pageNum: pageNum.value,
         pageSize: pageSize.value,
         keyword: searchKeyword.value ? searchKeyword.value.trim() : undefined,
-        category: activeCategory.value === "recommend" ? undefined : activeCategory.value,
+        category,
+        recommended: isRecommendedScope ? true : undefined,
         tag: activeTag.value || undefined
       }
     })
@@ -704,11 +710,18 @@ watch(
 .category-tabs {
   display: flex;
   justify-content: center;
-  gap: 25px;
+  gap: clamp(16px, 4vw, 25px);
   padding-bottom: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
   
   .tab-item {
     position: relative;
+    flex: 0 0 auto;
     padding: 6px 4px;
     color: #888;
     font-size: 16px;
@@ -765,6 +778,43 @@ watch(
       font-weight: 600;
     }
   }
+}
+
+@media (max-width: 720px) {
+  .sticky-header {
+    padding: 8px 16px;
+  }
+
+  .category-tabs {
+    justify-content: flex-start;
+    gap: 22px;
+    padding: 0 2px 6px;
+
+    .tab-item {
+      font-size: 15px;
+
+      &.active {
+        font-size: 16px;
+      }
+    }
+  }
+
+  .tag-tabs {
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 10px;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tag-item {
+      flex: 0 0 auto;
+    }
+  }
+
 }
 
 .waterfall-wrapper {
@@ -863,9 +913,7 @@ watch(
       position: absolute;
       left: 14px;
       border-radius: 999px;
-      background: linear-gradient(90deg, #f3f3f3 0%, #ffecef 48%, #f3f3f3 100%);
-      background-size: 220% 100%;
-      animation: coverShimmer 1.2s ease-in-out infinite;
+      background: #ebe9e5;
     }
 
     .card-body::before {
@@ -910,9 +958,7 @@ watch(
     .cover-placeholder {
       position: absolute;
       inset: 0;
-      background: linear-gradient(105deg, #f7f7f7 0%, #fff1f4 45%, #f7f7f7 80%);
-      background-size: 220% 100%;
-      animation: coverShimmer 1.2s ease-in-out infinite;
+      background: #f1f0ed;
       pointer-events: none;
       z-index: 1;
     }
@@ -1011,15 +1057,6 @@ watch(
   }
 }
 
-@keyframes coverShimmer {
-  0% {
-    background-position: 160% 0;
-  }
-  100% {
-    background-position: -60% 0;
-  }
-}
-
 @keyframes noteContentIn {
   from {
     opacity: 0;
@@ -1028,6 +1065,20 @@ watch(
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (max-width: 720px) {
+  .waterfall-wrapper {
+    padding: 14px 12px 32px;
+  }
+
+  .masonry-container {
+    gap: 12px;
+  }
+
+  .masonry-column {
+    gap: 12px;
   }
 }
 

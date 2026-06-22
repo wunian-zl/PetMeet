@@ -338,10 +338,10 @@ const handleDelete = async (comment) => {
 }
 
 const applyDeletedComment = (comment) => {
-  commentTotal.value = Math.max(0, commentTotal.value - 1)
-  emit('count-change', -1)
-
   if (comment.parentId) {
+    commentTotal.value = Math.max(0, commentTotal.value - 1)
+    emit('count-change', -1)
+
     const root = comments.value.find((item) => item.id === comment.parentId)
     if (root) {
       root.replies = root.replies.filter((item) => item.id !== comment.id)
@@ -351,16 +351,9 @@ const applyDeletedComment = (comment) => {
     return
   }
 
-  if (Number(comment.replyCount || 0) > 0) {
-    comment.deleted = true
-    comment.content = null
-    comment.userNickname = null
-    comment.userAvatar = null
-    comment.mine = false
-    comment.liked = false
-    comment.likeCount = 0
-    return
-  }
+  const deletedCount = 1 + Math.max(0, Number(comment.replyCount || 0))
+  commentTotal.value = Math.max(0, commentTotal.value - deletedCount)
+  emit('count-change', -deletedCount)
 
   comments.value = comments.value.filter((item) => item.id !== comment.id)
   threadTotal.value = Math.max(0, threadTotal.value - 1)

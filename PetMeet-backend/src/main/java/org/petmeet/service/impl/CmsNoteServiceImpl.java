@@ -206,9 +206,9 @@ public class CmsNoteServiceImpl extends ServiceImpl<CmsNoteMapper, CmsNote> impl
      * 笔记列表
      */
     @Override
-    public Page<NoteListVO> pageList(Integer pageNum, Integer pageSize, String keyword, Long productId, String category, String tag) {
+    public Page<NoteListVO> pageList(Integer pageNum, Integer pageSize, String keyword, Long productId, String category, Boolean recommended, String tag) {
         // 先查缓存，命中就直接返回
-        String cacheKey = noteRedisSupport.buildNoteListCacheKey(pageNum, pageSize, keyword, productId, category, tag);
+        String cacheKey = noteRedisSupport.buildNoteListCacheKey(pageNum, pageSize, keyword, productId, category, recommended, tag);
         NoteListPageCacheDTO cached = noteRedisSupport.getNoteListPageCache(cacheKey);
         if (cached != null && cached.getRecords() != null) {
             Page<NoteListVO> voPage = new Page<>(cached.getCurrent(), cached.getSize(), cached.getTotal());
@@ -254,6 +254,9 @@ public class CmsNoteServiceImpl extends ServiceImpl<CmsNoteMapper, CmsNote> impl
 
         if (StrUtil.isNotBlank(category)) {
             wrapper.eq(CmsNote::getCategory, category.trim());
+        }
+        if (Boolean.TRUE.equals(recommended)) {
+            wrapper.eq(CmsNote::getIsRecommended, true);
         }
         if (StrUtil.isNotBlank(tag)) {
             String[] tags = tag.split(",");
