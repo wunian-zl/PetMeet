@@ -7,6 +7,7 @@
     modal-class="login-overlay"
     align-center
     destroy-on-close
+    @closed="handleClosed"
   >
     <div class="login-container">
       <div class="poster-section">
@@ -20,7 +21,7 @@
       </div>
 
       <div class="form-section">
-        <div class="close-btn" @click="userStore.hideLogin">
+        <div class="close-btn" @click="handleCloseClick">
           <el-icon><Close /></el-icon>
         </div>
 
@@ -67,13 +68,17 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Close, User, Lock } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import loginPosterUrl from '@/assets/login-poster.jpg'
 
 const userStore = useUserStore()
+const route = useRoute()
+const router = useRouter()
 const loading = ref(false)
+const authEntryPaths = ['/cart', '/publish', '/profile']
 const posterStyle = {
   backgroundImage: `url(${loginPosterUrl})`
 }
@@ -82,6 +87,16 @@ const loginForm = ref({
   username: '',
   password: ''
 })
+
+const handleCloseClick = () => {
+  userStore.hideLogin()
+}
+
+const handleClosed = () => {
+  if (!userStore.isLoggedIn && authEntryPaths.includes(route.path)) {
+    router.replace('/')
+  }
+}
 
 const handleLogin = async () => {
   if (!loginForm.value.username || !loginForm.value.password) {
