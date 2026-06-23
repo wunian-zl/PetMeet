@@ -84,6 +84,7 @@
           </transition>
         </router-view>
       </div>
+      <BeianFooter />
     </div>
   </div>
 </template>
@@ -92,6 +93,7 @@
 import { Odometer, User, DocumentChecked, Goods, List, Menu, Warning, Picture, Service } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { useAdminStore } from '@/store/admin'
+import BeianFooter from '@/components/BeianFooter.vue'
 
 const router = useRouter()
 const adminStore = useAdminStore()
@@ -164,6 +166,7 @@ const handleCommand = (command) => {
   background-color: #f0f2f5;
   padding: 20px;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .fade-enter-active,

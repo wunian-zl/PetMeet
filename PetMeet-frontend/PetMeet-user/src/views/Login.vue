@@ -1,6 +1,7 @@
 <template>
-  <div class="login-container">
-    <div class="login-card">
+  <div class="login-page">
+    <div class="login-container">
+      <div class="login-card">
     <!-- 左侧：图片与品牌区 -->
       <div class="login-image" :style="loginImageStyle">
         <div class="image-content">
@@ -209,7 +210,9 @@
           </div>
         </div>
       </div>
+      </div>
     </div>
+    <BeianFooter />
   </div>
 </template>
   
@@ -220,6 +223,7 @@ import { useUserStore } from '@/store/user'
 import request from '@/utils/request'
 import { ElMessage } from 'element-plus'
 import loginPosterUrl from '@/assets/login-poster.jpg'
+import BeianFooter from '@/components/BeianFooter.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -490,8 +494,16 @@ const handleResetPassword = async () => {
 </script>
   
 <style scoped lang="scss">
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: white;
+}
+
 .login-container {
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
   width: 100vw;
   display: flex;
   overflow: hidden;

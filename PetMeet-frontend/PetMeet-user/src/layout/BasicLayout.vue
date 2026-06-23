@@ -72,11 +72,14 @@
 
     <!-- 右侧主内容区 -->
     <main class="main-content">
-      <router-view v-slot="{ Component }">
-        <keep-alive :include="['Home', 'Shop', 'ShopList', 'Profile']">
-          <component :is="Component" />
-        </keep-alive>
-      </router-view>
+      <div class="page-content">
+        <router-view v-slot="{ Component }">
+          <keep-alive :include="['Home', 'Shop', 'ShopList', 'Profile']">
+            <component :is="Component" />
+          </keep-alive>
+        </router-view>
+      </div>
+      <BeianFooter />
     </main>
 
     <!-- 全局登录弹窗 -->
@@ -88,6 +91,7 @@
 import { onMounted } from 'vue'
 import { useUserStore } from '@/store/user'
 import { Location, Plus, ShoppingCart, UserFilled, Shop, Bell } from '@element-plus/icons-vue'
+import BeianFooter from '@/components/BeianFooter.vue'
 import LoginModal from '@/components/LoginModal.vue'
 
 const userStore = useUserStore()
@@ -250,5 +254,12 @@ onMounted(async () => {
   flex: 1;
   background-color: #fff;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-content {
+  flex: 1;
+  min-width: 0;
 }
 </style>

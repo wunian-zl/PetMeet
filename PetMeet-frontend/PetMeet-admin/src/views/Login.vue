@@ -1,6 +1,7 @@
 <template>
-  <div class="login-container">
-    <el-card class="login-card">
+  <div class="login-page">
+    <div class="login-container">
+      <el-card class="login-card">
       <template #header>
         <div class="login-header">
           <h2>PetMeet 后台管理</h2>
@@ -23,8 +24,9 @@
         </el-form-item>
         <el-button type="primary" class="login-btn" :loading="loading" @click="handleLogin">登录</el-button>
       </el-form>
-
-    </el-card>
+      </el-card>
+    </div>
+    <BeianFooter />
   </div>
 </template>
 
@@ -33,6 +35,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAdminStore } from '@/store/admin'
 import { ElMessage } from 'element-plus'
+import BeianFooter from '@/components/BeianFooter.vue'
 
 const router = useRouter()
 const adminStore = useAdminStore()
@@ -74,12 +77,25 @@ const handleLogin = async () => {
 </script>
 
 <style scoped lang="scss">
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #2f3239;
+}
+
 .login-container {
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
   display: flex;
   justify-content: center;
   align-items: center;
   background-color: #2f3239;
+}
+
+.login-page :deep(.beian-footer) {
+  background-color: #2f3239;
+  color: #aeb4bf;
 }
 
 .login-card {

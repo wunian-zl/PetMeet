@@ -65,6 +65,18 @@ sudo chown -R petmeet:petmeet /opt/petmeet
 powershell -ExecutionPolicy Bypass -File scripts\build-deploy-artifacts.ps1
 ```
 
+正式上线前请把真实ICP备案号传给构建脚本，前端会在用户端和管理端底部展示，并链接到工信部官网：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build-deploy-artifacts.ps1 -IcpBeianNo "蜀ICP备2026033981号-1"
+```
+
+如果公安备案也已通过，可同时传入公安备案号和公安备案详情页地址：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build-deploy-artifacts.ps1 -IcpBeianNo "蜀ICP备2026033981号-1" -PoliceBeianNo "替换成你的公网安备号" -PoliceBeianUrl "替换成公安备案详情页URL"
+```
+
 脚本会生成：
 
 ```text

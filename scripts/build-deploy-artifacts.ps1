@@ -1,5 +1,8 @@
 param(
-  [string]$OutputDir
+  [string]$OutputDir,
+  [string]$IcpBeianNo = $env:VITE_ICP_BEIAN_NO,
+  [string]$PoliceBeianNo = $env:VITE_POLICE_BEIAN_NO,
+  [string]$PoliceBeianUrl = $env:VITE_POLICE_BEIAN_URL
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,6 +29,36 @@ function Invoke-Checked {
   }
 }
 
+$frontendEnvKeys = @("VITE_ICP_BEIAN_NO", "VITE_POLICE_BEIAN_NO", "VITE_POLICE_BEIAN_URL")
+$frontendEnvBackup = @{}
+
+function Set-FrontendBuildEnv {
+  foreach ($key in $frontendEnvKeys) {
+    $frontendEnvBackup[$key] = [Environment]::GetEnvironmentVariable($key, "Process")
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($IcpBeianNo)) {
+    $env:VITE_ICP_BEIAN_NO = $IcpBeianNo
+  }
+  if (-not [string]::IsNullOrWhiteSpace($PoliceBeianNo)) {
+    $env:VITE_POLICE_BEIAN_NO = $PoliceBeianNo
+  }
+  if (-not [string]::IsNullOrWhiteSpace($PoliceBeianUrl)) {
+    $env:VITE_POLICE_BEIAN_URL = $PoliceBeianUrl
+  }
+}
+
+function Restore-FrontendBuildEnv {
+  foreach ($key in $frontendEnvKeys) {
+    $previousValue = $frontendEnvBackup[$key]
+    if ($null -eq $previousValue) {
+      Remove-Item "Env:\$key" -ErrorAction SilentlyContinue
+    } else {
+      Set-Item "Env:\$key" $previousValue
+    }
+  }
+}
+
 if (Test-Path $OutputDir) {
   Remove-Item -LiteralPath $OutputDir -Recurse -Force
 }
@@ -42,22 +75,27 @@ try {
   Pop-Location
 }
 
-Push-Location $userDir
+Set-FrontendBuildEnv
 try {
-  Invoke-Checked { & npm.cmd ci } "User frontend npm ci"
-  Invoke-Checked { & npm.cmd run build } "User frontend build"
-} finally {
-  Pop-Location
-}
+  Push-Location $userDir
+  try {
+    Invoke-Checked { & npm.cmd ci } "User frontend npm ci"
+    Invoke-Checked { & npm.cmd run build } "User frontend build"
+  } finally {
+    Pop-Location
+  }
 
-Push-Location $adminDir
-try {
-  $env:VITE_APP_BASE = "/admin/"
-  Invoke-Checked { & npm.cmd ci } "Admin frontend npm ci"
-  Invoke-Checked { & npm.cmd run build } "Admin frontend build"
+  Push-Location $adminDir
+  try {
+    $env:VITE_APP_BASE = "/admin/"
+    Invoke-Checked { & npm.cmd ci } "Admin frontend npm ci"
+    Invoke-Checked { & npm.cmd run build } "Admin frontend build"
+  } finally {
+    Remove-Item Env:\VITE_APP_BASE -ErrorAction SilentlyContinue
+    Pop-Location
+  }
 } finally {
-  Remove-Item Env:\VITE_APP_BASE -ErrorAction SilentlyContinue
-  Pop-Location
+  Restore-FrontendBuildEnv
 }
 
 $jar = Get-ChildItem -Path (Join-Path $backendDir "target") -Filter "*.jar" |
