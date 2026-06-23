@@ -832,7 +832,7 @@
             <el-input v-model="passwordForm.oldPassword" type="password" show-password placeholder="请输入原密码" />
           </el-form-item>
           <el-form-item label="新密码" prop="newPassword">
-            <el-input v-model="passwordForm.newPassword" type="password" show-password placeholder="8-64位，包含字母和数字" />
+            <el-input v-model="passwordForm.newPassword" type="password" show-password placeholder="8-18位，包含字母和数字" />
           </el-form-item>
           <el-form-item label="确认密码" prop="checkPassword">
             <el-input
@@ -1127,10 +1127,10 @@ const validatePasswordSection = () => {
     return false
   }
   if (passwordForm.newPassword.length < 8
-    || passwordForm.newPassword.length > 64
+    || passwordForm.newPassword.length > 18
     || !/[A-Za-z]/.test(passwordForm.newPassword)
     || !/\d/.test(passwordForm.newPassword)) {
-    ElMessage.warning('新密码必须为8-64位，且同时包含字母和数字')
+    ElMessage.warning('新密码必须为8-18位，且同时包含字母和数字')
     return false
   }
   if (passwordForm.checkPassword !== passwordForm.newPassword) {

@@ -213,7 +213,7 @@
             v-model="form.password"
             type="password"
             show-password
-            placeholder="8-64位，同时包含字母和数字"
+            placeholder="8-18位，同时包含字母和数字"
           />
         </el-form-item>
         <el-form-item label="手机号码" prop="phone">
@@ -829,8 +829,8 @@ const validateInitialPassword = (_rule, value, callback) => {
         callback(new Error('请输入登录密码'))
         return
     }
-    if (value.length < 8 || value.length > 64 || !/[A-Za-z]/.test(value) || !/\d/.test(value)) {
-        callback(new Error('密码必须为8-64位，且同时包含字母和数字'))
+    if (value.length < 8 || value.length > 18 || !/[A-Za-z]/.test(value) || !/\d/.test(value)) {
+        callback(new Error('密码必须为8-18位，且同时包含字母和数字'))
         return
     }
     callback()

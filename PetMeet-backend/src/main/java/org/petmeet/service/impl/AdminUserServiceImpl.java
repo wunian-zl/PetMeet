@@ -103,10 +103,10 @@ public class AdminUserServiceImpl implements AdminUserService {
             throw AppException.badRequest("初始密码不能为空");
         }
         if (initialPassword.length() < 8
-                || initialPassword.length() > 64
+                || initialPassword.length() > 18
                 || !initialPassword.matches(".*[A-Za-z].*")
                 || !initialPassword.matches(".*\\d.*")) {
-            throw AppException.badRequest("初始密码必须为8-64位，且同时包含字母和数字");
+            throw AppException.badRequest("初始密码必须为8-18位，且同时包含字母和数字");
         }
         user.setPassword(BCrypt.hashpw(initialPassword));
         if (user.getRole() == null) {

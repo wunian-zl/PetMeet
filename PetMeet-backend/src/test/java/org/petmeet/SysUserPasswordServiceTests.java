@@ -48,7 +48,7 @@ class SysUserPasswordServiceTests {
     @Test
     void registerReturnsLoginTokenAfterBindingContact() {
         RegisterDTO dto = new RegisterDTO();
-        dto.setUsername("register_test_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12));
+        dto.setUsername("reg_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12));
         dto.setPassword("PetMeet2026");
         dto.setNickname("register test");
         dto.setEmail("register-test@example.com");
@@ -77,6 +77,38 @@ class SysUserPasswordServiceTests {
 
         assertEquals(400, exception.getCode());
         assertEquals("该用户名不可使用，请换一个", exception.getMessage());
+    }
+
+    @Test
+    void registerRejectsWeakPasswordAtServiceLayer() {
+        RegisterDTO dto = createRegisterDto("weak_password_" + UUID.randomUUID().toString().replace("-", "").substring(0, 6));
+        dto.setPassword("ab");
+
+        AppException exception = assertThrows(AppException.class, () -> userService.register(dto));
+
+        assertEquals(400, exception.getCode());
+        assertEquals("密码必须为8-18位，且同时包含字母和数字", exception.getMessage());
+    }
+
+    @Test
+    void registerRejectsLongPasswordAtServiceLayer() {
+        RegisterDTO dto = createRegisterDto("long_password_" + UUID.randomUUID().toString().replace("-", "").substring(0, 6));
+        dto.setPassword("PetMeet2026Password");
+
+        AppException exception = assertThrows(AppException.class, () -> userService.register(dto));
+
+        assertEquals(400, exception.getCode());
+        assertEquals("密码必须为8-18位，且同时包含字母和数字", exception.getMessage());
+    }
+
+    @Test
+    void registerRejectsChineseLoginUsernameAtServiceLayer() {
+        RegisterDTO dto = createRegisterDto("猫咪用户");
+
+        AppException exception = assertThrows(AppException.class, () -> userService.register(dto));
+
+        assertEquals(400, exception.getCode());
+        assertEquals("用户名需为2-20位，仅支持字母、数字或下划线", exception.getMessage());
     }
 
     @Test

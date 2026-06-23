@@ -31,32 +31,38 @@
         </div>
 
         <div class="form-content">
-          <div class="input-group">
-            <el-icon class="input-icon"><User /></el-icon>
-            <input
-              v-model.trim="loginForm.username"
-              type="text"
-              placeholder="请输入用户名"
-              class="capsule-input"
-            />
+          <div class="field-block">
+            <div class="input-group">
+              <el-icon class="input-icon"><User /></el-icon>
+              <input
+                v-model.trim="loginForm.username"
+                type="text"
+                placeholder="请输入用户名"
+                class="capsule-input"
+              />
+            </div>
+            <p class="field-hint">用户名2-20位，仅支持字母、数字、下划线</p>
           </div>
-          <div class="input-group">
-            <el-icon class="input-icon"><Lock /></el-icon>
-            <input
-              v-model="loginForm.password"
-              :type="passwordVisible ? 'text' : 'password'"
-              placeholder="请输入密码"
-              class="capsule-input password-input"
-              @keyup.enter="handleLogin"
-            />
-            <button
-              class="password-toggle"
-              type="button"
-              :aria-label="passwordVisible ? '隐藏密码' : '显示密码'"
-              @click="passwordVisible = !passwordVisible"
-            >
-              <el-icon><View v-if="!passwordVisible" /><Hide v-else /></el-icon>
-            </button>
+          <div class="field-block">
+            <div class="input-group">
+              <el-icon class="input-icon"><Lock /></el-icon>
+              <input
+                v-model="loginForm.password"
+                :type="passwordVisible ? 'text' : 'password'"
+                placeholder="请输入密码"
+                class="capsule-input password-input"
+                @keyup.enter="handleLogin"
+              />
+              <button
+                class="password-toggle"
+                type="button"
+                :aria-label="passwordVisible ? '隐藏密码' : '显示密码'"
+                @click="passwordVisible = !passwordVisible"
+              >
+                <el-icon><View v-if="!passwordVisible" /><Hide v-else /></el-icon>
+              </button>
+            </div>
+            <p class="field-hint">密码8-18位，需同时包含字母和数字</p>
           </div>
           <div class="login-actions">
             <button class="forgot-btn" type="button" @click="openResetDialog">忘记密码?</button>
@@ -96,7 +102,7 @@
           v-model="resetForm.newPassword"
           type="password"
           show-password
-          placeholder="8-64位，包含字母和数字"
+          placeholder="8-18位，包含字母和数字"
         />
       </el-form-item>
     </el-form>
@@ -120,14 +126,14 @@
     </div>
     <el-form label-position="top" class="register-profile-form">
       <el-form-item label="登录用户名">
-        <el-input v-model.trim="registerForm.username" placeholder="2-20位，支持汉字/字母/数字/下划线" />
+        <el-input v-model.trim="registerForm.username" placeholder="2-20位，仅支持字母/数字/下划线" />
       </el-form-item>
       <el-form-item label="登录密码">
         <el-input
           v-model="registerForm.password"
           type="password"
           show-password
-          placeholder="8-64位，包含字母和数字"
+          placeholder="8-18位，包含字母和数字"
         />
       </el-form-item>
       <el-form-item label="展示昵称">
@@ -254,6 +260,14 @@ const handleLogin = async () => {
 }
 
 const openRegisterDialog = () => {
+  if (!isValidUsername(loginForm.value.username || '')) {
+    ElMessage.warning('用户名需为2-20位，仅支持字母、数字或下划线')
+    return
+  }
+  if (!isStrongPassword(loginForm.value.password || '')) {
+    ElMessage.warning('密码必须为8-18位，且同时包含字母和数字')
+    return
+  }
   registerForm.value.username = loginForm.value.username || ''
   registerForm.value.password = loginForm.value.password || ''
   registerForm.value.nickname = loginForm.value.username || ''
@@ -290,8 +304,8 @@ const handleResetPassword = async () => {
     ElMessage.warning('请填写完整信息')
     return
   }
-  if (newPassword.length < 8 || newPassword.length > 64 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
-    ElMessage.warning('密码必须为8-64位，且同时包含字母和数字')
+  if (newPassword.length < 8 || newPassword.length > 18 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+    ElMessage.warning('密码必须为8-18位，且同时包含字母和数字')
     return
   }
 
@@ -313,11 +327,11 @@ const handleResetPassword = async () => {
 
 const isValidUsername = (value) => value.length >= 2
   && value.length <= 20
-  && /^[\u4e00-\u9fa5a-zA-Z0-9_]+$/.test(value)
+  && /^[A-Za-z0-9_]+$/.test(value)
 const isReservedUsername = (value) => reservedUsernames.includes(value.trim().toLowerCase())
 
 const isStrongPassword = (value) => value.length >= 8
-  && value.length <= 64
+  && value.length <= 18
   && /[A-Za-z]/.test(value)
   && /\d/.test(value)
 
@@ -327,7 +341,7 @@ const isValidEmail = (value) => !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valu
 const handleCompleteRegister = async () => {
   const form = registerForm.value
   if (!isValidUsername(form.username)) {
-    ElMessage.warning('用户名需为2-20位，仅支持汉字、字母、数字或下划线')
+    ElMessage.warning('用户名需为2-20位，仅支持字母、数字或下划线')
     return
   }
   if (isReservedUsername(form.username)) {
@@ -335,7 +349,7 @@ const handleCompleteRegister = async () => {
     return
   }
   if (!isStrongPassword(form.password)) {
-    ElMessage.warning('密码必须为8-64位，且同时包含字母和数字')
+    ElMessage.warning('密码必须为8-18位，且同时包含字母和数字')
     return
   }
   if (!form.phone && !form.email) {
@@ -520,7 +534,21 @@ const handleCompleteRegister = async () => {
 .form-content {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+}
+
+.field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-hint {
+  margin: 0;
+  padding-left: 18px;
+  color: #9aa1ad;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .input-group {

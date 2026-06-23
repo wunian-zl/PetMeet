@@ -35,6 +35,7 @@
                     class="rounded-input" 
                   />
                 </el-form-item>
+                <p class="field-hint">用户名2-20位，仅支持字母、数字、下划线</p>
                 <el-form-item prop="password">
                   <el-input 
                     v-model="loginForm.password" 
@@ -46,6 +47,7 @@
                     @keyup.enter="handleLogin"
                   />
                 </el-form-item>
+                <p class="field-hint">密码8-18位，需同时包含字母和数字</p>
                 
                 <div class="login-tools">
                   <el-button link type="primary" @click="activeTab = 'reset'">忘记密码?</el-button>
@@ -86,6 +88,7 @@
                     class="rounded-input"
                   />
                 </el-form-item>
+                <p class="field-hint">用户名2-20位，仅支持字母、数字、下划线</p>
                 <el-form-item prop="password">
                   <el-input 
                     v-model="registerForm.password" 
@@ -96,6 +99,7 @@
                     class="rounded-input"
                   />
                 </el-form-item>
+                <p class="field-hint">密码8-18位，需同时包含字母和数字</p>
                 <el-form-item prop="checkPassword">
                   <el-input 
                     v-model="registerForm.checkPassword" 
@@ -297,7 +301,24 @@ const registerForm = reactive({
 })
 const isReservedUsername = (value) => reservedUsernames.includes((value || '').trim().toLowerCase())
 
+const isStrongPassword = (value) => value.length >= 8
+  && value.length <= 18
+  && /[A-Za-z]/.test(value)
+  && /\d/.test(value)
+
+const isValidLoginUsername = (value) => value.length >= 2
+  && value.length <= 20
+  && /^[A-Za-z0-9_]+$/.test(value)
+
 const openRegisterFromLogin = () => {
+  if (!isValidLoginUsername(loginForm.username || '')) {
+    ElMessage.warning('用户名需为2-20位，仅支持字母、数字或下划线')
+    return
+  }
+  if (!isStrongPassword(loginForm.password || '')) {
+    ElMessage.warning('密码必须为8-18位，且同时包含字母和数字')
+    return
+  }
   registerForm.username = loginForm.username
   registerForm.password = loginForm.password
   registerForm.checkPassword = loginForm.password
@@ -334,8 +355,8 @@ const validatePass2 = (rule, value, callback) => {
 const validateRegisterPassword = (_rule, value, callback) => {
   if (!value) {
     callback(new Error('请输入密码'))
-  } else if (value.length < 8 || value.length > 64 || !/[A-Za-z]/.test(value) || !/\d/.test(value)) {
-    callback(new Error('密码必须为8-64位，且同时包含字母和数字'))
+  } else if (value.length < 8 || value.length > 18 || !/[A-Za-z]/.test(value) || !/\d/.test(value)) {
+    callback(new Error('密码必须为8-18位，且同时包含字母和数字'))
   } else {
     callback()
   }
@@ -364,6 +385,8 @@ const validateEmail = (_rule, value, callback) => {
 const validateRegisterUsername = (_rule, value, callback) => {
   if (!value) {
     callback(new Error('请输入用户名'))
+  } else if (!isValidLoginUsername(value)) {
+    callback(new Error('用户名需为2-20位，仅支持字母、数字或下划线'))
   } else if (isReservedUsername(value)) {
     callback(new Error('该用户名不可使用，请换一个'))
   } else {
@@ -601,6 +624,14 @@ const handleResetPassword = async () => {
   line-height: 1.6;
   margin: 16px 0 32px;
   padding: 0 4px;
+}
+
+.field-hint {
+  margin: -16px 0 14px;
+  padding: 0 18px;
+  color: #9aa1ad;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .login-tools {

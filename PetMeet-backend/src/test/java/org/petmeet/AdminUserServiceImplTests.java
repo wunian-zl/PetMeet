@@ -61,6 +61,15 @@ class AdminUserServiceImplTests {
     }
 
     @Test
+    void createUserRejectsLongPassword() {
+        SysUser user = newUser("PetMeet2026Password");
+        when(sysUserMapper.selectCount(any())).thenReturn(0L);
+
+        assertThrows(RuntimeException.class, () -> adminUserService.createUser(user));
+        verify(sysUserMapper, never()).insert(any());
+    }
+
+    @Test
     void createUserHashesValidPassword() {
         SysUser user = newUser("PetMeet2026");
         when(sysUserMapper.selectCount(any())).thenReturn(0L);

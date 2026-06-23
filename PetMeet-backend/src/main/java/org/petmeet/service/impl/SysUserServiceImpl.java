@@ -28,6 +28,9 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> implements SysUserService {
+    private static final String PASSWORD_POLICY_MESSAGE = "密码必须为8-18位，且同时包含字母和数字";
+    private static final String USERNAME_POLICY_MESSAGE = "用户名需为2-20位，仅支持字母、数字或下划线";
+
     private static final Set<String> RESERVED_USERNAMES = Set.of(
             "admin",
             "administrator",
@@ -49,6 +52,8 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         String username = dto.getUsername() == null ? "" : dto.getUsername().trim();
         String phone = dto.getPhone() == null ? "" : dto.getPhone().trim();
         String email = dto.getEmail() == null ? "" : dto.getEmail().trim();
+        ensureValidUsername(username);
+        ensureStrongPassword(dto.getPassword());
         if (isReservedUsername(username)) {
             throw AppException.badRequest("该用户名不可使用，请换一个");
         }
@@ -175,6 +180,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     public void resetPassword(ResetPasswordDTO dto) {
         String username = dto.getUsername() == null ? "" : dto.getUsername().trim();
         String contact = dto.getContact() == null ? "" : dto.getContact().trim();
+        ensureStrongPassword(dto.getNewPassword());
         if (username.isEmpty() || contact.isEmpty()) {
             throw AppException.badRequest("请填写用户名和已绑定的手机号或邮箱");
         }
@@ -210,6 +216,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         if (BCrypt.checkpw(dto.getNewPassword(), user.getPassword())) {
             throw AppException.badRequest("新密码不能和原密码相同");
         }
+        ensureStrongPassword(dto.getNewPassword());
 
         user.setPassword(BCrypt.hashpw(dto.getNewPassword()));
         this.updateById(user);
@@ -262,6 +269,24 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
     private boolean isReservedUsername(String username) {
         return RESERVED_USERNAMES.contains(username.toLowerCase(Locale.ROOT));
+    }
+
+    private void ensureValidUsername(String username) {
+        if (username.length() < 2
+                || username.length() > 20
+                || !username.matches("^[A-Za-z0-9_]+$")) {
+            throw AppException.badRequest(USERNAME_POLICY_MESSAGE);
+        }
+    }
+
+    private void ensureStrongPassword(String password) {
+        if (password == null
+                || password.length() < 8
+                || password.length() > 18
+                || !password.matches(".*[A-Za-z].*")
+                || !password.matches(".*\\d.*")) {
+            throw AppException.badRequest(PASSWORD_POLICY_MESSAGE);
+        }
     }
 
     private void ensureUserSiteAccount(SysUser user) {

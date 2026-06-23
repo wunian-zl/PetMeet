@@ -19,7 +19,7 @@ public class ResetPasswordDTO {
     private String contact;
 
     @NotBlank(message = "新密码不能为空")
-    @Size(min = 8, max = 64, message = "新密码长度为8-64个字符")
+    @Size(min = 8, max = 18, message = "新密码长度为8-18个字符")
     @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d).+$", message = "新密码必须同时包含字母和数字")
     @Schema(description = "新密码", example = "PetMeet2026")
     private String newPassword;
