@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.petmeet.common.Result;
 import org.petmeet.dto.AddressDTO;
+import org.petmeet.dto.ChangePasswordDTO;
 import org.petmeet.entity.SysUser;
 import org.petmeet.entity.UmsAddress;
 import org.petmeet.service.SysUserService;
@@ -44,6 +45,16 @@ public class UserController {
         // 调用业务层更新用户资料
         sysUserService.updateUserInfo(user);
         return Result.success("更新成功", null);
+    }
+
+    /**
+     * 修改当前用户密码
+     */
+    @PutMapping("/password")
+    @Operation(summary = "修改当前用户密码")
+    public Result<Void> changePassword(@Valid @RequestBody ChangePasswordDTO dto) {
+        sysUserService.changePassword(dto);
+        return Result.success("密码修改成功", null);
     }
 
     /**

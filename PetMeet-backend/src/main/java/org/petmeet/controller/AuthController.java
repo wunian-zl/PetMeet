@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.petmeet.common.Result;
 import org.petmeet.dto.LoginDTO;
 import org.petmeet.dto.RegisterDTO;
+import org.petmeet.dto.ResetPasswordDTO;
 import org.petmeet.service.SysUserService;
 import org.petmeet.vo.LoginVO;
 import org.springframework.web.bind.annotation.*;
@@ -39,6 +40,16 @@ public class AuthController {
         // 调用业务层完成登录校验
         LoginVO vo = sysUserService.login(dto);
         return Result.success("登录成功", vo);
+    }
+
+    /**
+     * 找回密码
+     */
+    @PostMapping("/reset-password")
+    @Operation(summary = "找回密码")
+    public Result<Void> resetPassword(@Valid @RequestBody ResetPasswordDTO dto) {
+        sysUserService.resetPassword(dto);
+        return Result.success("密码已重置", null);
     }
 
     /**

@@ -1,6 +1,7 @@
 package org.petmeet.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -31,7 +32,12 @@ public class RegisterDTO {
     @Schema(description = "昵称", example = "宠物爱好者")
     private String nickname;
 
-    @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确")
+    @Pattern(regexp = "^$|^1[3-9]\\d{9}$", message = "手机号格式不正确")
     @Schema(description = "手机号", example = "13800138000")
     private String phone;
+
+    @Email(message = "邮箱格式不正确")
+    @Size(max = 100, message = "邮箱最多100个字符")
+    @Schema(description = "电子邮箱", example = "petlover@example.com")
+    private String email;
 }

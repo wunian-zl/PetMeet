@@ -10,6 +10,7 @@ export const useUserStore = defineStore('user', {
             avatar: ''
         },
         loginVisible: false,  // Global modal visibility
+        loginRedirect: '',
         cartCount: 0,         // 购物车数量
         unpaidOrderCount: 0,  // 待支付订单数量
         notificationUnreadCount: 0 // 未读通知数量
@@ -20,7 +21,8 @@ export const useUserStore = defineStore('user', {
     },
     actions: {
         // 登录弹窗控制
-        showLogin() {
+        showLogin(redirect = '') {
+            this.loginRedirect = redirect || ''
             this.loginVisible = true
         },
         hideLogin() {
@@ -28,10 +30,19 @@ export const useUserStore = defineStore('user', {
         },
 
         // 登录功能
-        async login(loginForm) {
+        async login(loginForm, options = {}) {
             // 调用后端登录接口
-            const res = await request.post('/auth/login', loginForm)
+            const res = await request.post('/auth/login', loginForm, options)
 
+            await this.applyLoginResult(res)
+        },
+
+        async register(registerForm) {
+            const res = await request.post('/auth/register', registerForm)
+            await this.applyLoginResult(res)
+        },
+
+        async applyLoginResult(res) {
             // 把 token 保存到 Pinia 和 localStorage
             const token = res.token || res
             this.token = token

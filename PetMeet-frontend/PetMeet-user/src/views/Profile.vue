@@ -751,31 +751,49 @@
       </el-dialog>
 
   <!-- 编辑资料弹窗 -->
-      <el-dialog v-model="editDialogVisible" title="编辑资料" width="520px" destroy-on-close align-center class="custom-dialog">
-        <el-form label-width="80px" label-position="left">
-          <el-form-item label="头像">
-            <el-upload
-              ref="avatarUploadRef"
-              action="/api/common/upload/image"
-              name="file"
-              :data="{ biz: 'userAvatar' }"
-              :headers="uploadHeaders"
-              :show-file-list="false"
-              :limit="1"
-              :on-success="handleAvatarSuccess"
-              :on-change="handleAvatarChange"
-              :on-exceed="handleAvatarExceed"
-            >
-              <div class="avatar-uploader">
-                <img v-if="avatarPreview" :src="avatarPreview" class="avatar-preview" />
-                <div v-else class="avatar-placeholder">
-                  <el-icon><Plus /></el-icon>
-                </div>
-              </div>
-            </el-upload>
+      <el-dialog
+        v-model="editDialogVisible"
+        title="编辑资料"
+        width="min(460px, 92vw)"
+        destroy-on-close
+        align-center
+        class="custom-dialog profile-edit-dialog"
+        @closed="resetChangePasswordForm"
+      >
+        <el-form label-position="top" class="profile-edit-form">
+          <div class="profile-form-section">
+            <div class="section-title">基础资料</div>
+          </div>
+          <el-form-item label="登录账号">
+            <el-input :model-value="userStore.userInfo.username || ''" readonly placeholder="登录时使用的用户名" />
+            <div class="field-hint">登录账号不可在这里修改；下次登录请继续使用这个用户名。</div>
           </el-form-item>
-          <el-form-item label="昵称">
-            <el-input v-model="editForm.nickname" maxlength="20" show-word-limit placeholder="请输入昵称" />
+          <el-form-item label="头像">
+            <div class="profile-avatar-field">
+              <el-upload
+                ref="avatarUploadRef"
+                action="/api/common/upload/image"
+                name="file"
+                :data="{ biz: 'userAvatar' }"
+                :headers="uploadHeaders"
+                :show-file-list="false"
+                :limit="1"
+                :on-success="handleAvatarSuccess"
+                :on-change="handleAvatarChange"
+                :on-exceed="handleAvatarExceed"
+              >
+                <div class="avatar-uploader">
+                  <img v-if="avatarPreview" :src="avatarPreview" class="avatar-preview" />
+                  <div v-else class="avatar-placeholder">
+                    <el-icon><Plus /></el-icon>
+                  </div>
+                </div>
+              </el-upload>
+              <div class="field-hint avatar-hint">点击头像选择新图片</div>
+            </div>
+          </el-form-item>
+          <el-form-item label="展示昵称">
+            <el-input v-model="editForm.nickname" maxlength="20" show-word-limit placeholder="别人看到的昵称，不用于登录" />
           </el-form-item>
           <el-form-item label="性别">
             <el-select v-model="editForm.gender" placeholder="请选择">
@@ -805,10 +823,30 @@
           <el-form-item label="手机号码">
             <el-input v-model="editForm.phone" placeholder="请输入手机号" />
           </el-form-item>
+
+          <div class="profile-form-section security-section">
+            <div class="section-title">账号安全</div>
+            <div class="section-subtitle">不需要修改密码时可以留空。</div>
+          </div>
+          <el-form-item label="原密码" prop="oldPassword">
+            <el-input v-model="passwordForm.oldPassword" type="password" show-password placeholder="请输入原密码" />
+          </el-form-item>
+          <el-form-item label="新密码" prop="newPassword">
+            <el-input v-model="passwordForm.newPassword" type="password" show-password placeholder="8-64位，包含字母和数字" />
+          </el-form-item>
+          <el-form-item label="确认密码" prop="checkPassword">
+            <el-input
+              v-model="passwordForm.checkPassword"
+              type="password"
+              show-password
+              placeholder="请再次输入新密码"
+              @keyup.enter="handleSaveProfile"
+            />
+          </el-form-item>
         </el-form>
         <template #footer>
           <el-button @click="editDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="editSaving" @click="handleSaveProfile">保存</el-button>
+          <el-button type="primary" :loading="editSaving || passwordSaving" @click="handleSaveProfile">保存</el-button>
         </template>
       </el-dialog>
 
@@ -913,6 +951,7 @@ const handleLogout = () => {
 // 编辑资料
 const editDialogVisible = ref(false)
 const editSaving = ref(false)
+const passwordSaving = ref(false)
 const editForm = reactive({
   nickname: '',
   avatar: '',
@@ -925,6 +964,11 @@ const editForm = reactive({
 const avatarPreview = ref('')
 const avatarUploadRef = ref(null)
 let avatarObjectUrl = ''
+const passwordForm = reactive({
+  oldPassword: '',
+  newPassword: '',
+  checkPassword: ''
+})
 
 const getZodiac = (dateStr) => {
   if (!dateStr) return ''
@@ -1027,6 +1071,9 @@ const handleSaveProfile = async () => {
     ElMessage.warning('请输入昵称')
     return
   }
+  if (!validatePasswordSection()) {
+    return
+  }
   editSaving.value = true
   try {
     await request.put('/user/info', {
@@ -1038,12 +1085,59 @@ const handleSaveProfile = async () => {
       email: editForm.email || '',
       phone: editForm.phone || ''
     })
+    if (hasPasswordInput()) {
+      passwordSaving.value = true
+      try {
+        await request.put('/user/password', {
+          oldPassword: passwordForm.oldPassword,
+          newPassword: passwordForm.newPassword
+        })
+      } finally {
+        passwordSaving.value = false
+      }
+    }
     await userStore.getUserInfo()
     editDialogVisible.value = false
-    ElMessage.success('保存成功')
+    ElMessage.success(hasPasswordInput() ? '资料和密码已保存' : '保存成功')
   } finally {
     editSaving.value = false
   }
+}
+
+const resetChangePasswordForm = () => {
+  passwordForm.oldPassword = ''
+  passwordForm.newPassword = ''
+  passwordForm.checkPassword = ''
+}
+
+const hasPasswordInput = () => Boolean(
+  passwordForm.oldPassword
+  || passwordForm.newPassword
+  || passwordForm.checkPassword
+)
+
+const validatePasswordSection = () => {
+  if (!hasPasswordInput()) return true
+  if (!passwordForm.oldPassword) {
+    ElMessage.warning('请输入原密码')
+    return false
+  }
+  if (!passwordForm.newPassword) {
+    ElMessage.warning('请输入新密码')
+    return false
+  }
+  if (passwordForm.newPassword.length < 8
+    || passwordForm.newPassword.length > 64
+    || !/[A-Za-z]/.test(passwordForm.newPassword)
+    || !/\d/.test(passwordForm.newPassword)) {
+    ElMessage.warning('新密码必须为8-64位，且同时包含字母和数字')
+    return false
+  }
+  if (passwordForm.checkPassword !== passwordForm.newPassword) {
+    ElMessage.warning('两次输入密码不一致')
+    return false
+  }
+  return true
 }
 
 // 我的笔记
@@ -2437,12 +2531,47 @@ onBeforeUnmount(() => {
   }
 }
 
+.profile-edit-dialog {
+  .field-hint {
+    margin-top: 5px;
+    color: #9ca3af;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .avatar-hint {
+    text-align: center;
+  }
+
+  .profile-form-section {
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #edf0f4;
+  }
+
+  .security-section {
+    margin-top: 16px;
+  }
+
+  .section-title {
+    color: #2f343d;
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .section-subtitle {
+    margin-top: 4px;
+    color: #9ca3af;
+    font-size: 12px;
+  }
+}
+
 .avatar-uploader {
-  width: 96px;
-  height: 96px;
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
-  background: #f5f6f7;
-  border: 1px dashed #d7dadd;
+  background: #fafbfc;
+  border: 1px dashed #d8dde6;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2451,8 +2580,8 @@ onBeforeUnmount(() => {
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: #ff6b6b;
-    background: #fff5f5;
+    border-color: #f06478;
+    background: #fff3f5;
   }
 }
 
@@ -3381,8 +3510,137 @@ onBeforeUnmount(() => {
   }
 }
 
+.profile-edit-dialog {
+  --el-color-primary: #f06478;
+  --el-color-primary-dark-2: #d94e62;
+  --el-color-primary-light-3: #f58b99;
+  --el-color-primary-light-5: #f8aebb;
+  --el-color-primary-light-7: #fbd0d7;
+  --el-color-primary-light-8: #fde1e5;
+  --el-color-primary-light-9: #fff3f5;
+  --el-input-focus-border-color: #f06478;
+  border-radius: 18px !important;
+  border: 1px solid #eceff3;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.18) !important;
+  overflow: hidden;
+
+  .el-dialog__header {
+    padding: 22px 24px 8px;
+    margin: 0;
+  }
+
+  .el-dialog__title {
+    color: #2f343d;
+    font-size: 22px;
+    font-weight: 650;
+    line-height: 1.25;
+  }
+
+  .el-dialog__headerbtn {
+    top: 18px;
+    right: 18px;
+    width: 30px;
+    height: 30px;
+
+    .el-dialog__close {
+      color: #9aa1ad;
+      font-size: 22px;
+      transition: color 0.2s ease;
+    }
+
+    &:hover .el-dialog__close {
+      color: #4b5563;
+    }
+  }
+
+  .el-dialog__body {
+    padding: 8px 24px 8px;
+    max-height: min(70vh, 620px);
+    overflow-y: auto;
+  }
+
+  .el-dialog__footer {
+    padding: 10px 24px 22px;
+    border-top: 1px solid #f1f3f5;
+  }
+
+  .profile-edit-form .el-form-item {
+    margin-bottom: 12px;
+  }
+
+  .el-form-item__label {
+    color: #4b5563;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.2;
+    margin-bottom: 6px;
+  }
+
+  .el-input__wrapper,
+  .el-select__wrapper {
+    min-height: 40px;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 0 0 1px #d8dde6 inset;
+    padding: 0 14px;
+    transition: box-shadow 0.18s ease, background 0.18s ease;
+  }
+
+  .el-input__wrapper:hover,
+  .el-select__wrapper:hover {
+    box-shadow: 0 0 0 1px #cbd2dd inset;
+  }
+
+  .el-input__wrapper.is-focus,
+  .el-select__wrapper.is-focused {
+    box-shadow: 0 0 0 1px #f06478 inset;
+  }
+
+  .el-input__inner {
+    color: #333842;
+    font-size: 15px;
+  }
+
+  .el-input__inner::placeholder {
+    color: #a2a9b5;
+  }
+
+  .el-button {
+    border-radius: 10px;
+    font-weight: 600;
+    min-height: 38px;
+    padding: 9px 18px;
+  }
+
+  .el-button--primary {
+    --el-button-bg-color: #f06478;
+    --el-button-border-color: #f06478;
+    --el-button-hover-bg-color: #e7576c;
+    --el-button-hover-border-color: #e7576c;
+    --el-button-active-bg-color: #d94e62;
+    --el-button-active-border-color: #d94e62;
+    box-shadow: none;
+  }
+
+  .el-button--primary:focus,
+  .el-button--primary:focus-visible {
+    background-color: #f06478;
+    border-color: #f06478;
+    color: #fff;
+    outline: 2px solid rgba(240, 100, 120, 0.2);
+    outline-offset: 2px;
+  }
+}
+
+.profile-avatar-field {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .review-dialog,
-.after-sale-dialog {
+.after-sale-dialog,
+.password-dialog {
   --el-color-primary: rgb(255, 92, 92);
   --el-color-primary-light-3: rgba(255, 92, 92, 0.75);
   --el-color-primary-light-5: rgba(255, 92, 92, 0.45);

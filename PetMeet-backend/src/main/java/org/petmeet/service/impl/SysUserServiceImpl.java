@@ -9,8 +9,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.petmeet.dto.ChangePasswordDTO;
 import org.petmeet.dto.LoginDTO;
 import org.petmeet.dto.RegisterDTO;
+import org.petmeet.dto.ResetPasswordDTO;
 import org.petmeet.entity.SysUser;
 import org.petmeet.mapper.SysUserMapper;
 import org.petmeet.service.SysUserService;
@@ -32,6 +34,12 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     public LoginVO register(RegisterDTO dto) {
         // 根据用户名查询用户是否已存在
         String username = dto.getUsername() == null ? "" : dto.getUsername().trim();
+        String phone = dto.getPhone() == null ? "" : dto.getPhone().trim();
+        String email = dto.getEmail() == null ? "" : dto.getEmail().trim();
+        if (phone.isEmpty() && email.isEmpty()) {
+            throw AppException.badRequest("请至少填写手机号或邮箱，用于找回密码");
+        }
+
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysUser::getUsername, username);
         if (this.count(wrapper) > 0) {
@@ -43,7 +51,8 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         user.setUsername(username);
         user.setPassword(BCrypt.hashpw(dto.getPassword()));
         user.setNickname(dto.getNickname() != null ? dto.getNickname() : username);
-        user.setPhone(dto.getPhone());
+        user.setPhone(phone.isEmpty() ? null : phone);
+        user.setEmail(email.isEmpty() ? null : email);
         user.setRole(SysUser.ROLE_USER);
         user.setStatus(SysUser.STATUS_ENABLED);
         user.setCreateTime(LocalDateTime.now());
@@ -74,11 +83,8 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         wrapper.eq(SysUser::getUsername, loginUsername);
         SysUser user = this.getOne(wrapper);
 
-        // 用户不存在时，按项目规则自动注册一个普通用户
         if (user == null) {
-            validateAutoRegisterCredentials(loginUsername, loginPassword);
-            user = createAutoRegisteredUser(loginUsername, loginPassword);
-            log.info("Auto registered user on login: username={}", loginUsername);
+            throw AppException.notFound("账号未注册");
         }
 
         // 校验密码和账号状态
@@ -143,6 +149,52 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     }
 
     /**
+     * 找回密码：校验用户名和已绑定手机号/邮箱后重置密码。
+     */
+    @Override
+    public void resetPassword(ResetPasswordDTO dto) {
+        String username = dto.getUsername() == null ? "" : dto.getUsername().trim();
+        String contact = dto.getContact() == null ? "" : dto.getContact().trim();
+        if (username.isEmpty() || contact.isEmpty()) {
+            throw AppException.badRequest("请填写用户名和已绑定的手机号或邮箱");
+        }
+
+        LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SysUser::getUsername, username);
+        SysUser user = this.getOne(wrapper);
+        if (user == null || !matchesBoundContact(user, contact)) {
+            throw AppException.badRequest("账号或绑定信息不匹配");
+        }
+        if (!Integer.valueOf(SysUser.STATUS_ENABLED).equals(user.getStatus())) {
+            throw AppException.badRequest("账号已被禁用");
+        }
+
+        user.setPassword(BCrypt.hashpw(dto.getNewPassword()));
+        this.updateById(user);
+    }
+
+    /**
+     * 修改当前登录用户密码。
+     */
+    @Override
+    public void changePassword(ChangePasswordDTO dto) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        SysUser user = this.getById(userId);
+        if (user == null) {
+            throw AppException.notFound("用户不存在");
+        }
+        if (!BCrypt.checkpw(dto.getOldPassword(), user.getPassword())) {
+            throw AppException.badRequest("原密码错误");
+        }
+        if (BCrypt.checkpw(dto.getNewPassword(), user.getPassword())) {
+            throw AppException.badRequest("新密码不能和原密码相同");
+        }
+
+        user.setPassword(BCrypt.hashpw(dto.getNewPassword()));
+        this.updateById(user);
+    }
+
+    /**
      * 管理员登录
      */
     @Override
@@ -180,35 +232,11 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         return buildLoginVO(user);
     }
 
-    /**
-     * 自动注册前的参数校验
-     */
-    private void validateAutoRegisterCredentials(String username, String password) {
-        if (username.length() < 2 || username.length() > 20 || !username.matches("^[\\u4e00-\\u9fa5a-zA-Z0-9_]+$")) {
-            throw AppException.badRequest("账号未注册，自动注册要求用户名为2-20位，仅支持汉字、字母、数字或下划线");
-        }
-        if (password.length() < 8
-                || password.length() > 64
-                || !password.matches(".*[A-Za-z].*")
-                || !password.matches(".*\\d.*")) {
-            throw AppException.badRequest("账号未注册，自动注册要求密码为8-64位，且同时包含字母和数字");
-        }
-    }
-
-    /**
-     * 自动注册用户
-     */
-    private SysUser createAutoRegisteredUser(String username, String password) {
-        // 封装自动注册的普通用户信息
-        SysUser user = new SysUser();
-        user.setUsername(username);
-        user.setPassword(BCrypt.hashpw(password));
-        user.setNickname(username);
-        user.setRole(SysUser.ROLE_USER);
-        user.setStatus(SysUser.STATUS_ENABLED);
-        user.setCreateTime(LocalDateTime.now());
-        this.save(user);
-        return user;
+    private boolean matchesBoundContact(SysUser user, String contact) {
+        String phone = user.getPhone() == null ? "" : user.getPhone().trim();
+        String email = user.getEmail() == null ? "" : user.getEmail().trim();
+        return (!phone.isEmpty() && phone.equals(contact))
+                || (!email.isEmpty() && email.equalsIgnoreCase(contact));
     }
 
     /**

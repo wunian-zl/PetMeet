@@ -47,8 +47,12 @@
                   />
                 </el-form-item>
                 
+                <div class="login-tools">
+                  <el-button link type="primary" @click="activeTab = 'reset'">忘记密码?</el-button>
+                </div>
+
                 <div class="form-tips">
-                  若账号未注册，首次登录会自动注册并完成登录（用户名2-20位，支持汉字/字母/数字/下划线，密码8-64位且包含字母和数字）。
+                  若账号未注册，会先让你完善绑定信息，提交后完成注册并登录。
                 </div>
 
                 <el-form-item>
@@ -61,6 +65,12 @@
     
         <!-- 注册页签 -->
             <el-tab-pane label="注册" name="register">
+              <div v-if="registerFromLogin" class="new-account-notice">
+                <span>这是一个未注册的新账号。请确认用户名和密码，并绑定手机号或邮箱。</span>
+                <el-button link type="primary" @click="returnToLoginFromRegister">
+                  已有账号，返回登录
+                </el-button>
+              </div>
               <el-form
                 ref="registerFormRef"
                 :model="registerForm"
@@ -96,9 +106,94 @@
                     class="rounded-input"
                   />
                 </el-form-item>
+                <el-form-item prop="nickname">
+                  <el-input
+                    v-model.trim="registerForm.nickname"
+                    placeholder="展示昵称（别人看到的昵称）"
+                    prefix-icon="UserFilled"
+                    maxlength="20"
+                    show-word-limit
+                    class="rounded-input"
+                  />
+                </el-form-item>
+                <el-form-item prop="phone">
+                  <el-input
+                    v-model.trim="registerForm.phone"
+                    placeholder="绑定手机号（手机号或邮箱填一个）"
+                    prefix-icon="Iphone"
+                    class="rounded-input"
+                  />
+                </el-form-item>
+                <el-form-item prop="email">
+                  <el-input
+                    v-model.trim="registerForm.email"
+                    placeholder="绑定邮箱（手机号或邮箱填一个）"
+                    prefix-icon="Message"
+                    class="rounded-input"
+                  />
+                </el-form-item>
+                <div class="form-tips register-tip">
+                  绑定信息只用于找回密码和账号识别，至少填写手机号或邮箱其中一项。
+                </div>
                 <el-form-item>
                   <el-button type="primary" class="submit-btn" :loading="loading" @click="handleRegister" round>
                     注 册
+                  </el-button>
+                </el-form-item>
+              </el-form>
+            </el-tab-pane>
+
+            <el-tab-pane label="找回密码" name="reset">
+              <el-form
+                ref="resetFormRef"
+                :model="resetForm"
+                :rules="resetRules"
+                class="auth-form"
+                size="large"
+              >
+                <el-form-item prop="username">
+                  <el-input
+                    v-model.trim="resetForm.username"
+                    placeholder="请输入用户名"
+                    prefix-icon="User"
+                    class="rounded-input"
+                  />
+                </el-form-item>
+                <el-form-item prop="contact">
+                  <el-input
+                    v-model.trim="resetForm.contact"
+                    placeholder="已绑定手机号或邮箱"
+                    prefix-icon="Message"
+                    class="rounded-input"
+                  />
+                </el-form-item>
+                <el-form-item prop="newPassword">
+                  <el-input
+                    v-model="resetForm.newPassword"
+                    type="password"
+                    placeholder="设置新密码"
+                    prefix-icon="Lock"
+                    show-password
+                    class="rounded-input"
+                  />
+                </el-form-item>
+                <el-form-item prop="checkPassword">
+                  <el-input
+                    v-model="resetForm.checkPassword"
+                    type="password"
+                    placeholder="确认新密码"
+                    prefix-icon="Lock"
+                    show-password
+                    class="rounded-input"
+                    @keyup.enter="handleResetPassword"
+                  />
+                </el-form-item>
+                <div class="form-tips">
+                  需要填写账号已绑定的手机号或邮箱。没有绑定信息的旧账号，需要先登录后到个人中心补充。
+                </div>
+                <el-form-item>
+                  <el-button type="primary" class="submit-btn" :loading="resetLoading" @click="handleResetPassword" round>
+                    重置密码
                   </el-button>
                 </el-form-item>
               </el-form>
@@ -131,6 +226,8 @@ const loginImageStyle = {
 
 const activeTab = ref('login')
 const loading = ref(false)
+const resetLoading = ref(false)
+const registerFromLogin = ref(false)
 
 // 其余逻辑保持不变
 // 登录逻辑
@@ -152,16 +249,15 @@ const handleLogin = async () => {
     if (valid) {
       loading.value = true
       try {
-        await userStore.login(loginForm)
+        await userStore.login(loginForm, { silentError: true })
         ElMessage.success('登录成功')
-        let target = '/'
-        const redirect = typeof route.query?.redirect === 'string' ? route.query.redirect : ''
-        if (redirect && redirect.startsWith('/')) {
-          target = redirect.replace(/\?+$/, '') || '/'
-        }
-        router.replace(target)
+        router.replace(getLoginRedirect())
       } catch (error) {
-        // 错误提示交给全局拦截器
+        if (error?.code === 404 || error?.response?.code === 404) {
+          openRegisterFromLogin()
+        } else {
+          ElMessage.error(error?.message || '登录失败')
+        }
       } finally {
         loading.value = false
       }
@@ -169,13 +265,49 @@ const handleLogin = async () => {
   })
 }
 
+const getLoginRedirect = () => {
+  let target = '/'
+  const redirect = typeof route.query?.redirect === 'string' ? route.query.redirect : ''
+  if (redirect && redirect.startsWith('/')) {
+    target = redirect.replace(/\?+$/, '') || '/'
+  }
+  return target
+}
+
 // 注册逻辑
 const registerFormRef = ref(null)
 const registerForm = reactive({
   username: '',
   password: '',
-  checkPassword: ''
+  checkPassword: '',
+  nickname: '',
+  phone: '',
+  email: ''
 })
+
+const openRegisterFromLogin = () => {
+  registerForm.username = loginForm.username
+  registerForm.password = loginForm.password
+  registerForm.checkPassword = loginForm.password
+  registerForm.nickname = loginForm.username
+  registerForm.phone = ''
+  registerForm.email = ''
+  registerFromLogin.value = true
+  activeTab.value = 'register'
+}
+
+const returnToLoginFromRegister = () => {
+  loginForm.username = registerForm.username || loginForm.username
+  loginForm.password = ''
+  registerForm.password = ''
+  registerForm.checkPassword = ''
+  registerForm.phone = ''
+  registerForm.email = ''
+  registerFromLogin.value = false
+  activeTab.value = 'login'
+  registerFormRef.value?.clearValidate()
+  loginFormRef.value?.clearValidate()
+}
 
 const validatePass2 = (rule, value, callback) => {
   if (value === '') {
@@ -197,10 +329,32 @@ const validateRegisterPassword = (_rule, value, callback) => {
   }
 }
 
+const validatePhone = (_rule, value, callback) => {
+  if (!value) {
+    callback()
+  } else if (!/^1[3-9]\d{9}$/.test(value)) {
+    callback(new Error('手机号格式不正确'))
+  } else {
+    callback()
+  }
+}
+
+const validateEmail = (_rule, value, callback) => {
+  if (!value) {
+    callback()
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    callback(new Error('邮箱格式不正确'))
+  } else {
+    callback()
+  }
+}
+
 const registerRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ validator: validateRegisterPassword, trigger: 'blur' }],
-  checkPassword: [{ validator: validatePass2, trigger: 'blur' }]
+  checkPassword: [{ validator: validatePass2, trigger: 'blur' }],
+  phone: [{ validator: validatePhone, trigger: 'blur' }],
+  email: [{ validator: validateEmail, trigger: 'blur' }]
 }
 
 const handleRegister = async () => {
@@ -208,19 +362,78 @@ const handleRegister = async () => {
   
   await registerFormRef.value.validate(async (valid) => {
     if (valid) {
+      if (!registerForm.phone && !registerForm.email) {
+        ElMessage.warning('请至少绑定手机号或邮箱')
+        return
+      }
       loading.value = true
       try {
-        await request.post('/auth/register', {
+        await userStore.register({
           username: registerForm.username,
-          password: registerForm.password
+          password: registerForm.password,
+          nickname: registerForm.nickname || registerForm.username,
+          phone: registerForm.phone || null,
+          email: registerForm.email || null
         })
-        ElMessage.success('注册成功，请登录')
-        activeTab.value = 'login'
+        ElMessage.success('注册并登录成功')
         registerFormRef.value.resetFields()
+        registerFromLogin.value = false
+        router.replace(getLoginRedirect())
       } catch (error) {
         // 这里交给全局拦截器处理
       } finally {
         loading.value = false
+      }
+    }
+  })
+}
+
+const resetFormRef = ref(null)
+const resetForm = reactive({
+  username: '',
+  contact: '',
+  newPassword: '',
+  checkPassword: ''
+})
+
+const validateResetPass2 = (_rule, value, callback) => {
+  if (value === '') {
+    callback(new Error('请再次输入新密码'))
+  } else if (value !== resetForm.newPassword) {
+    callback(new Error('两次输入密码不一致!'))
+  } else {
+    callback()
+  }
+}
+
+const resetRules = {
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  contact: [{ required: true, message: '请输入已绑定手机号或邮箱', trigger: 'blur' }],
+  newPassword: [{ validator: validateRegisterPassword, trigger: 'blur' }],
+  checkPassword: [{ validator: validateResetPass2, trigger: 'blur' }]
+}
+
+const handleResetPassword = async () => {
+  if (!resetFormRef.value) return
+
+  await resetFormRef.value.validate(async (valid) => {
+    if (valid) {
+      resetLoading.value = true
+      try {
+        await request.post('/auth/reset-password', {
+          username: resetForm.username,
+          contact: resetForm.contact,
+          newPassword: resetForm.newPassword
+        })
+        ElMessage.success('密码已重置，请重新登录')
+        loginForm.username = resetForm.username
+        loginForm.password = ''
+        activeTab.value = 'login'
+        resetFormRef.value.resetFields()
+      } catch (error) {
+        // 这里交给全局拦截器处理
+      } finally {
+        resetLoading.value = false
       }
     }
   })
@@ -364,26 +577,91 @@ const handleRegister = async () => {
   padding: 0 4px;
 }
 
+.login-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin: -10px 0 8px;
+
+  :deep(.el-button.is-link) {
+    color: #626b78;
+    font-weight: 600;
+
+    &:hover,
+    &:focus {
+      color: #e7576c;
+      background: transparent;
+    }
+  }
+}
+
+.register-tip {
+  margin-top: -4px;
+  margin-bottom: 20px;
+}
+
+.new-account-notice {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  color: #626b78;
+  background: #fafbfc;
+  border: 1px solid #edf0f4;
+  line-height: 1.5;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  span {
+    flex: 1;
+  }
+
+  :deep(.el-button.is-link) {
+    color: #626b78;
+    font-weight: 600;
+
+    &:hover,
+    &:focus {
+      color: #e7576c;
+      background: transparent;
+    }
+  }
+
+  @media (max-width: 520px) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 .submit-btn {
   width: 100%;
   height: 54px;
   font-size: 18px;
   font-weight: 600;
-  background: linear-gradient(135deg, #ff8092 0%, #ff5c7c 100%);
+  background: #f06478;
   border: none;
-  box-shadow: 0 10px 25px rgba(255, 92, 124, 0.3);
+  box-shadow: none;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   letter-spacing: 2px;
   
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 15px 30px rgba(255, 92, 124, 0.4);
-    background: linear-gradient(135deg, #ff94a4 0%, #ff6b8b 100%);
+    box-shadow: 0 10px 20px rgba(240, 100, 120, 0.18);
+    background: #e7576c;
   }
   
   &:active {
     transform: translateY(1px);
-    box-shadow: 0 5px 15px rgba(255, 92, 124, 0.2);
+    box-shadow: none;
+    background: #d94e62;
+  }
+
+  &:focus,
+  &:focus-visible {
+    background: #f06478;
+    outline: 2px solid rgba(240, 100, 120, 0.2);
+    outline-offset: 2px;
   }
 }
 

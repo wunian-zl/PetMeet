@@ -171,14 +171,14 @@ router.beforeEach((to, from, next) => {
         } else {
             if (!token && isDirectAuthEntry) {
                 ElMessage.warning('请先登录后继续操作')
-                userStore.showLogin()
+                userStore.showLogin(to.fullPath)
             }
             next()
         }
     } else {
         // 未登录时，弹出登录框并阻止进入受保护页面
         ElMessage.warning('请先登录后继续操作')
-        userStore.showLogin()
+        userStore.showLogin(to.fullPath)
         next(false)
     }
 })
