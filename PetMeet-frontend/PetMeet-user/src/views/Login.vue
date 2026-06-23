@@ -223,6 +223,17 @@ const userStore = useUserStore()
 const loginImageStyle = {
   backgroundImage: `url(${loginPosterUrl})`
 }
+const reservedUsernames = [
+  'admin',
+  'administrator',
+  'root',
+  'system',
+  'official',
+  'petmeet',
+  '客服',
+  '管理员',
+  '系统'
+]
 
 const activeTab = ref('login')
 const loading = ref(false)
@@ -284,6 +295,7 @@ const registerForm = reactive({
   phone: '',
   email: ''
 })
+const isReservedUsername = (value) => reservedUsernames.includes((value || '').trim().toLowerCase())
 
 const openRegisterFromLogin = () => {
   registerForm.username = loginForm.username
@@ -349,8 +361,18 @@ const validateEmail = (_rule, value, callback) => {
   }
 }
 
+const validateRegisterUsername = (_rule, value, callback) => {
+  if (!value) {
+    callback(new Error('请输入用户名'))
+  } else if (isReservedUsername(value)) {
+    callback(new Error('该用户名不可使用，请换一个'))
+  } else {
+    callback()
+  }
+}
+
 const registerRules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  username: [{ validator: validateRegisterUsername, trigger: 'blur' }],
   password: [{ validator: validateRegisterPassword, trigger: 'blur' }],
   checkPassword: [{ validator: validatePass2, trigger: 'blur' }],
   phone: [{ validator: validatePhone, trigger: 'blur' }],
@@ -362,6 +384,10 @@ const handleRegister = async () => {
   
   await registerFormRef.value.validate(async (valid) => {
     if (valid) {
+      if (isReservedUsername(registerForm.username)) {
+        ElMessage.warning('该用户名不可使用，请换一个')
+        return
+      }
       if (!registerForm.phone && !registerForm.email) {
         ElMessage.warning('请至少绑定手机号或邮箱')
         return

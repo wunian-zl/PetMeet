@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -56,6 +57,26 @@ class SysUserPasswordServiceTests {
         loginId = vo.getUserId();
 
         assertTrue(vo.getToken() != null && !vo.getToken().isBlank());
+    }
+
+    @Test
+    void registerRejectsReservedUsername() {
+        RegisterDTO dto = createRegisterDto("admin");
+
+        AppException exception = assertThrows(AppException.class, () -> userService.register(dto));
+
+        assertEquals(400, exception.getCode());
+        assertEquals("该用户名不可使用，请换一个", exception.getMessage());
+    }
+
+    @Test
+    void registerRejectsReservedUsernameCaseInsensitive() {
+        RegisterDTO dto = createRegisterDto("Admin");
+
+        AppException exception = assertThrows(AppException.class, () -> userService.register(dto));
+
+        assertEquals(400, exception.getCode());
+        assertEquals("该用户名不可使用，请换一个", exception.getMessage());
     }
 
     @Test
@@ -123,5 +144,14 @@ class SysUserPasswordServiceTests {
         user.setCreateTime(LocalDateTime.now());
         userMapper.insert(user);
         return user;
+    }
+
+    private RegisterDTO createRegisterDto(String username) {
+        RegisterDTO dto = new RegisterDTO();
+        dto.setUsername(username);
+        dto.setPassword("PetMeet2026");
+        dto.setNickname(username);
+        dto.setEmail(username.toLowerCase() + "-blocked@example.com");
+        return dto;
     }
 }

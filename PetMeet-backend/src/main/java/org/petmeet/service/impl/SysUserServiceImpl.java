@@ -21,11 +21,24 @@ import org.petmeet.vo.UserInfoVO;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
+import java.util.Set;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> implements SysUserService {
+    private static final Set<String> RESERVED_USERNAMES = Set.of(
+            "admin",
+            "administrator",
+            "root",
+            "system",
+            "official",
+            "petmeet",
+            "客服",
+            "管理员",
+            "系统"
+    );
 
     /**
      * 注册功能
@@ -36,6 +49,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         String username = dto.getUsername() == null ? "" : dto.getUsername().trim();
         String phone = dto.getPhone() == null ? "" : dto.getPhone().trim();
         String email = dto.getEmail() == null ? "" : dto.getEmail().trim();
+        if (isReservedUsername(username)) {
+            throw AppException.badRequest("该用户名不可使用，请换一个");
+        }
         if (phone.isEmpty() && email.isEmpty()) {
             throw AppException.badRequest("请至少填写手机号或邮箱，用于找回密码");
         }
@@ -237,6 +253,10 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         String email = user.getEmail() == null ? "" : user.getEmail().trim();
         return (!phone.isEmpty() && phone.equals(contact))
                 || (!email.isEmpty() && email.equalsIgnoreCase(contact));
+    }
+
+    private boolean isReservedUsername(String username) {
+        return RESERVED_USERNAMES.contains(username.toLowerCase(Locale.ROOT));
     }
 
     /**

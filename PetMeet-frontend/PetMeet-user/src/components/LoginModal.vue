@@ -180,6 +180,17 @@ const authEntryPaths = ['/cart', '/publish', '/profile']
 const posterStyle = {
   backgroundImage: `url(${loginPosterUrl})`
 }
+const reservedUsernames = [
+  'admin',
+  'administrator',
+  'root',
+  'system',
+  'official',
+  'petmeet',
+  '客服',
+  '管理员',
+  '系统'
+]
 
 const loginForm = ref({
   username: '',
@@ -303,6 +314,7 @@ const handleResetPassword = async () => {
 const isValidUsername = (value) => value.length >= 2
   && value.length <= 20
   && /^[\u4e00-\u9fa5a-zA-Z0-9_]+$/.test(value)
+const isReservedUsername = (value) => reservedUsernames.includes(value.trim().toLowerCase())
 
 const isStrongPassword = (value) => value.length >= 8
   && value.length <= 64
@@ -316,6 +328,10 @@ const handleCompleteRegister = async () => {
   const form = registerForm.value
   if (!isValidUsername(form.username)) {
     ElMessage.warning('用户名需为2-20位，仅支持汉字、字母、数字或下划线')
+    return
+  }
+  if (isReservedUsername(form.username)) {
+    ElMessage.warning('该用户名不可使用，请换一个')
     return
   }
   if (!isStrongPassword(form.password)) {
