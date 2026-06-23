@@ -89,6 +89,44 @@ class SysUserPasswordServiceTests {
     }
 
     @Test
+    void adminCannotLoginFromUserSite() {
+        SysUser admin = createUser("PetMeet2026", null, "admin-user-site@example.com", SysUser.ROLE_ADMIN);
+        LoginDTO dto = new LoginDTO();
+        dto.setUsername(admin.getUsername());
+        dto.setPassword("PetMeet2026");
+
+        AppException exception = assertThrows(AppException.class, () -> userService.login(dto));
+
+        assertEquals(403, exception.getCode());
+        assertEquals("管理员账号请从后台登录", exception.getMessage());
+    }
+
+    @Test
+    void adminCanStillLoginFromAdminSite() {
+        SysUser admin = createUser("PetMeet2026", null, "admin-site@example.com", SysUser.ROLE_ADMIN);
+        LoginDTO dto = new LoginDTO();
+        dto.setUsername(admin.getUsername());
+        dto.setPassword("PetMeet2026");
+
+        LoginVO vo = userService.adminLogin(dto);
+        loginId = vo.getUserId();
+
+        assertTrue(vo.getToken() != null && !vo.getToken().isBlank());
+    }
+
+    @Test
+    void adminTokenCannotReadUserSiteProfile() {
+        SysUser admin = createUser("PetMeet2026", null, "admin-profile@example.com", SysUser.ROLE_ADMIN);
+        loginId = admin.getId();
+        StpUtil.login(loginId);
+
+        AppException exception = assertThrows(AppException.class, () -> userService.getCurrentUser());
+
+        assertEquals(401, exception.getCode());
+        assertEquals("请使用用户端账号登录", exception.getMessage());
+    }
+
+    @Test
     void resetPasswordRequiresMatchingBoundContact() {
         SysUser user = createUser("PetMeet2026", "13800138000", "reset@example.com");
 
@@ -133,13 +171,17 @@ class SysUserPasswordServiceTests {
     }
 
     private SysUser createUser(String password, String phone, String email) {
+        return createUser(password, phone, email, SysUser.ROLE_USER);
+    }
+
+    private SysUser createUser(String password, String phone, String email, String role) {
         SysUser user = new SysUser();
         user.setUsername("password_test_" + UUID.randomUUID().toString().replace("-", ""));
         user.setPassword(BCrypt.hashpw(password));
         user.setNickname("password test");
         user.setPhone(phone);
         user.setEmail(email);
-        user.setRole(SysUser.ROLE_USER);
+        user.setRole(role);
         user.setStatus(SysUser.STATUS_ENABLED);
         user.setCreateTime(LocalDateTime.now());
         userMapper.insert(user);

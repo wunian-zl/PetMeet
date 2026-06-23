@@ -110,6 +110,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         if (!Integer.valueOf(SysUser.STATUS_ENABLED).equals(user.getStatus())) {
             throw AppException.badRequest("账号已被禁用");
         }
+        if (SysUser.ROLE_ADMIN.equals(user.getRole())) {
+            throw AppException.forbidden("管理员账号请从后台登录");
+        }
 
         // 创建登录态，并更新最后登录时间
         StpUtil.login(user.getId());
@@ -135,7 +138,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     public UserInfoVO getCurrentUser() {
         // 从登录态中获取当前用户 id
         Long userId = StpUtil.getLoginIdAsLong();
-        return getUserInfoById(userId);
+        SysUser user = this.getById(userId);
+        ensureUserSiteAccount(user);
+        return buildUserInfoVO(user);
     }
 
     @Override
@@ -144,9 +149,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         if (user == null) {
             throw AppException.notFound("用户不存在");
         }
-        UserInfoVO vo = new UserInfoVO();
-        BeanUtil.copyProperties(user, vo);
-        return vo;
+        return buildUserInfoVO(user);
     }
 
     /**
@@ -156,6 +159,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     public void updateUserInfo(SysUser user) {
         // 只允许修改当前登录用户自己的资料
         Long userId = StpUtil.getLoginIdAsLong();
+        ensureUserSiteAccount(this.getById(userId));
         user.setId(userId);
 
         // 这些敏感字段不允许在这里直接修改
@@ -178,7 +182,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysUser::getUsername, username);
         SysUser user = this.getOne(wrapper);
-        if (user == null || !matchesBoundContact(user, contact)) {
+        if (user == null || SysUser.ROLE_ADMIN.equals(user.getRole()) || !matchesBoundContact(user, contact)) {
             throw AppException.badRequest("账号或绑定信息不匹配");
         }
         if (!Integer.valueOf(SysUser.STATUS_ENABLED).equals(user.getStatus())) {
@@ -199,6 +203,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         if (user == null) {
             throw AppException.notFound("用户不存在");
         }
+        ensureUserSiteAccount(user);
         if (!BCrypt.checkpw(dto.getOldPassword(), user.getPassword())) {
             throw AppException.badRequest("原密码错误");
         }
@@ -257,6 +262,22 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
     private boolean isReservedUsername(String username) {
         return RESERVED_USERNAMES.contains(username.toLowerCase(Locale.ROOT));
+    }
+
+    private void ensureUserSiteAccount(SysUser user) {
+        if (user == null) {
+            throw AppException.notFound("用户不存在");
+        }
+        if (SysUser.ROLE_ADMIN.equals(user.getRole())) {
+            StpUtil.logout();
+            throw AppException.unauthorized("请使用用户端账号登录");
+        }
+    }
+
+    private UserInfoVO buildUserInfoVO(SysUser user) {
+        UserInfoVO vo = new UserInfoVO();
+        BeanUtil.copyProperties(user, vo);
+        return vo;
     }
 
     /**
