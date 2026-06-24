@@ -22,7 +22,11 @@ export const useUserStore = defineStore('user', {
     actions: {
         // 登录弹窗控制
         showLogin(redirect = '') {
-            this.loginRedirect = redirect || ''
+            if (redirect) {
+                this.loginRedirect = redirect
+            } else if (!this.loginVisible) {
+                this.loginRedirect = ''
+            }
             this.loginVisible = true
         },
         hideLogin() {
@@ -56,8 +60,8 @@ export const useUserStore = defineStore('user', {
         },
 
         // 获取当前登录用户信息
-        async getUserInfo() {
-            const res = await request.get('/user/info')
+        async getUserInfo(options = {}) {
+            const res = await request.get('/user/info', options)
             this.userInfo = res
         },
 
@@ -73,44 +77,53 @@ export const useUserStore = defineStore('user', {
         },
 
         // 获取购物车数量
-        async fetchCartCount() {
+        async fetchCartCount(options = {}) {
             if (!this.token) {
                 this.cartCount = 0
                 return
             }
             try {
-                const res = await request.get('/cart/count')
+                const res = await request.get('/cart/count', options)
                 this.cartCount = res || 0
             } catch (error) {
-                this.cartCount = 0
+                if (!options.silentError) {
+                    this.cartCount = 0
+                }
             }
         },
 
         // 获取待支付订单数量
-        async fetchUnpaidOrderCount() {
+        async fetchUnpaidOrderCount(options = {}) {
             if (!this.token) {
                 this.unpaidOrderCount = 0
                 return
             }
             try {
-                const res = await request.get('/order/list', { params: { pageNum: 1, pageSize: 1, status: 0 } })
+                const res = await request.get('/order/list', {
+                    params: { pageNum: 1, pageSize: 1, status: 0 },
+                    ...options
+                })
                 this.unpaidOrderCount = res?.total || 0
             } catch (error) {
-                this.unpaidOrderCount = 0
+                if (!options.silentError) {
+                    this.unpaidOrderCount = 0
+                }
             }
         },
 
         // 获取未读通知数量
-        async fetchNotificationUnreadCount() {
+        async fetchNotificationUnreadCount(options = {}) {
             if (!this.token) {
                 this.notificationUnreadCount = 0
                 return
             }
             try {
-                const res = await request.get('/notification/unread-count')
+                const res = await request.get('/notification/unread-count', options)
                 this.notificationUnreadCount = res || 0
             } catch (error) {
-                this.notificationUnreadCount = 0
+                if (!options.silentError) {
+                    this.notificationUnreadCount = 0
+                }
             }
         },
 

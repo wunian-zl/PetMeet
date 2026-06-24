@@ -867,6 +867,7 @@ import { useUserStore } from '@/store/user'
 import request from '@/utils/request'
 import { formatTime } from '@/utils/format'
 import { getImageUrl, getAvatarUrl } from '@/utils/image'
+import { STALE_REFRESH_MS, useStaleRefresh } from '@/utils/staleRefresh'
 import { chinaAreaOptions, chinaAreaCascaderProps, chinaAreaNameByCode, chinaAreaCodesFromNames } from '@/utils/area'
 import { ElMessage, ElMessageBox, genFileId } from 'element-plus'
 import { 
@@ -919,15 +920,18 @@ const followStats = reactive({
   following: 0
 })
 
-const loadFollowStats = async () => {
+const loadFollowStats = async (options = {}) => {
+  const { silent = false } = options
   if (!userStore.userInfo?.id) return
   try {
-    const res = await request.get(`/follow/count/${userStore.userInfo.id}`)
+    const res = await request.get(`/follow/count/${userStore.userInfo.id}`, { silentError: silent })
     followStats.followers = res?.followers || 0
     followStats.following = res?.following || 0
   } catch (e) {
-    followStats.followers = 0
-    followStats.following = 0
+    if (!silent) {
+      followStats.followers = 0
+      followStats.following = 0
+    }
   }
 }
 
@@ -1147,39 +1151,66 @@ const collectedNotes = ref([])
 const likedNotes = ref([])
 const loadingCollected = ref(false)
 const loadingLiked = ref(false)
-const getMyNotes = async () => {
-  loadingNotes.value = true
+const getMyNotes = async (options = {}) => {
+  const { silent = false } = options
+  if (!silent) {
+    loadingNotes.value = true
+  }
   try {
-    const res = await request.get('/note/my')
+    const res = await request.get('/note/my', { silentError: silent })
     myNotes.value = Array.isArray(res) ? res : (res?.records || [])
   } catch (e) {
-    myNotes.value = []
+    if (!silent) {
+      myNotes.value = []
+    }
   } finally {
-    loadingNotes.value = false
+    if (!silent) {
+      loadingNotes.value = false
+    }
   }
 }
 
-const getCollectedNotes = async () => {
-  loadingCollected.value = true
+const getCollectedNotes = async (options = {}) => {
+  const { silent = false } = options
+  if (!silent) {
+    loadingCollected.value = true
+  }
   try {
-    const res = await request.get('/note/my/collect', { params: { pageNum: 1, pageSize: 20 } })
+    const res = await request.get('/note/my/collect', {
+      params: { pageNum: 1, pageSize: 20 },
+      silentError: silent
+    })
     collectedNotes.value = Array.isArray(res) ? res : (res?.records || [])
   } catch (e) {
-    collectedNotes.value = []
+    if (!silent) {
+      collectedNotes.value = []
+    }
   } finally {
-    loadingCollected.value = false
+    if (!silent) {
+      loadingCollected.value = false
+    }
   }
 }
 
-const getLikedNotes = async () => {
-  loadingLiked.value = true
+const getLikedNotes = async (options = {}) => {
+  const { silent = false } = options
+  if (!silent) {
+    loadingLiked.value = true
+  }
   try {
-    const res = await request.get('/note/my/like', { params: { pageNum: 1, pageSize: 20 } })
+    const res = await request.get('/note/my/like', {
+      params: { pageNum: 1, pageSize: 20 },
+      silentError: silent
+    })
     likedNotes.value = Array.isArray(res) ? res : (res?.records || [])
   } catch (e) {
-    likedNotes.value = []
+    if (!silent) {
+      likedNotes.value = []
+    }
   } finally {
-    loadingLiked.value = false
+    if (!silent) {
+      loadingLiked.value = false
+    }
   }
 }
 
@@ -1312,13 +1343,15 @@ const normalizeAfterSaleTab = (value) => (
   AFTER_SALE_TABS.includes(value) ? value : null
 )
 
-const listUnreadAfterSaleNoticeIds = async () => {
+const listUnreadAfterSaleNoticeIds = async (options = {}) => {
+  const { silent = false } = options
   if (!userStore.token) {
     return []
   }
   try {
     const res = await request.get('/notification/list', {
-      params: { pageNum: 1, pageSize: 500, unreadOnly: 1 }
+      params: { pageNum: 1, pageSize: 500, unreadOnly: 1 },
+      silentError: silent
     })
     const list = Array.isArray(res) ? res : (res?.records || [])
     return list
@@ -1329,33 +1362,27 @@ const listUnreadAfterSaleNoticeIds = async () => {
       .filter((item) => Number.isInteger(item.id) && item.id > 0 && afterSaleNoticeBizTypes.has(item.bizType))
       .map((item) => item.id)
   } catch (e) {
-    return []
+    return silent ? null : []
   }
 }
 
-const refreshAfterSaleUnreadCount = async () => {
-  const ids = await listUnreadAfterSaleNoticeIds()
+const refreshAfterSaleUnreadCount = async (options = {}) => {
+  const ids = await listUnreadAfterSaleNoticeIds(options)
+  if (!Array.isArray(ids)) return
   afterSaleUnreadCount.value = ids.length
 }
 
-const markAfterSaleNoticesRead = async () => {
-  const ids = await listUnreadAfterSaleNoticeIds()
+const markAfterSaleNoticesRead = async (options = {}) => {
+  const { silent = false } = options
+  const ids = await listUnreadAfterSaleNoticeIds(options)
+  if (!Array.isArray(ids)) return
   if (ids.length === 0) {
     afterSaleUnreadCount.value = 0
     return
   }
-  await Promise.all(ids.map((id) => request.put(`/notification/${id}/read`).catch(() => null)))
-  await refreshAfterSaleUnreadCount()
-  userStore.fetchNotificationUnreadCount()
-}
-
-const handleProfileFocus = () => {
-  syncSeededNoteOrderIds()
-  if (activeTab.value === 'orders' && orderSubTab.value === 'after_sale') {
-    markAfterSaleNoticesRead()
-    return
-  }
-  refreshAfterSaleUnreadCount()
+  await Promise.all(ids.map((id) => request.put(`/notification/${id}/read`, null, { silentError: silent }).catch(() => null)))
+  await refreshAfterSaleUnreadCount(options)
+  userStore.fetchNotificationUnreadCount({ silentError: silent })
 }
 
 const isOrderSeedNotePublished = (order) => {
@@ -1364,29 +1391,49 @@ const isOrderSeedNotePublished = (order) => {
   return seededNoteOrderIds.value.has(orderId)
 }
 
-const getOrders = async () => {
-    loadingOrders.value = true
+const getOrders = async (options = {}) => {
+    const { silent = false } = options
+    if (!silent) {
+        loadingOrders.value = true
+    }
     try {
-        const res = await request.get('/order/list', { params: { pageNum: 1, pageSize: 200 } })
+        const res = await request.get('/order/list', {
+          params: { pageNum: 1, pageSize: 200 },
+          silentError: silent
+        })
         orderList.value = Array.isArray(res) ? res : (res?.records || [])
-        userStore.fetchUnpaidOrderCount()
+        userStore.fetchUnpaidOrderCount({ silentError: silent })
     } catch (e) {
-        orderList.value = []
+        if (!silent) {
+            orderList.value = []
+        }
     } finally {
         syncSelectedOrderIds()
-        loadingOrders.value = false
+        if (!silent) {
+            loadingOrders.value = false
+        }
     }
 }
 
-const getAfterSales = async () => {
-  loadingAfterSale.value = true
+const getAfterSales = async (options = {}) => {
+  const { silent = false } = options
+  if (!silent) {
+    loadingAfterSale.value = true
+  }
   try {
-    const res = await request.get('/after-sale/my/list', { params: { pageNum: 1, pageSize: 200 } })
+    const res = await request.get('/after-sale/my/list', {
+      params: { pageNum: 1, pageSize: 200 },
+      silentError: silent
+    })
     afterSaleList.value = Array.isArray(res) ? res : (res?.records || [])
   } catch (e) {
-    afterSaleList.value = []
+    if (!silent) {
+      afterSaleList.value = []
+    }
   } finally {
-    loadingAfterSale.value = false
+    if (!silent) {
+      loadingAfterSale.value = false
+    }
   }
 }
 
@@ -2051,13 +2098,18 @@ watch(orderSubTab, (val) => {
 // 地址管理
 const addressList = ref([])
 const loadingAddress = ref(false)
-const getAddressList = async () => {
-    loadingAddress.value = true
+const getAddressList = async (options = {}) => {
+    const { silent = false } = options
+    if (!silent) {
+        loadingAddress.value = true
+    }
     try {
-        const res = await request.get('/user/address/list')
+        const res = await request.get('/user/address/list', { silentError: silent })
         addressList.value = res || []
     } finally {
-        loadingAddress.value = false
+        if (!silent) {
+            loadingAddress.value = false
+        }
     }
 }
 
@@ -2190,25 +2242,24 @@ const resetProfileData = () => {
 }
 
 // 切换标签页时，按需加载对应数据
-const loadTab = (tab) => {
+const loadTab = async (tab, options = {}) => {
     if (!userStore.isLoggedIn) {
         resetProfileData()
         return
     }
-    if (tab === 'notes') getMyNotes()
-    else if (tab === 'collections') getCollectedNotes()
-    else if (tab === 'likes') getLikedNotes()
+    if (tab === 'notes') return getMyNotes(options)
+    else if (tab === 'collections') return getCollectedNotes(options)
+    else if (tab === 'likes') return getLikedNotes(options)
     else if (tab === 'orders') {
         syncSeededNoteOrderIds()
-        getOrders()
-        getAfterSales()
+        await Promise.all([getOrders(options), getAfterSales(options)])
         if (orderSubTab.value === 'after_sale') {
-          markAfterSaleNoticesRead()
+          await markAfterSaleNoticesRead(options)
         } else {
-          refreshAfterSaleUnreadCount()
+          await refreshAfterSaleUnreadCount(options)
         }
     }
-    else if (tab === 'address') getAddressList()
+    else if (tab === 'address') return getAddressList(options)
 }
 
 const handleTabClick = (pane) => {
@@ -2285,8 +2336,41 @@ watch(() => userStore.token, async (token) => {
     }
     userStore.fetchUnpaidOrderCount()
     refreshAfterSaleUnreadCount()
-    loadTab(activeTab.value)
-    loadFollowStats()
+    await loadTab(activeTab.value)
+    await loadFollowStats()
+})
+
+const isProfileRefreshing = () => loadingNotes.value
+  || loadingCollected.value
+  || loadingLiked.value
+  || loadingOrders.value
+  || loadingAfterSale.value
+  || loadingAddress.value
+  || orderDetailLoading.value
+
+const refreshCurrentProfileTab = async () => {
+    syncSeededNoteOrderIds()
+    if (!userStore.isLoggedIn) {
+      resetProfileData()
+      return
+    }
+    if (!userStore.userInfo?.id) {
+      try {
+        await userStore.getUserInfo({ silentError: true })
+      } catch (e) {}
+    }
+    await Promise.all([
+      userStore.fetchUnpaidOrderCount({ silentError: true }),
+      loadTab(activeTab.value, { silent: true }),
+      loadFollowStats({ silent: true })
+    ])
+}
+
+const profileStaleRefresh = useStaleRefresh({
+  staleMs: STALE_REFRESH_MS.profile,
+  refresh: refreshCurrentProfileTab,
+  isRefreshing: isProfileRefreshing,
+  shouldSkip: () => !userStore.isLoggedIn
 })
 
 let hasActivatedOnce = false
@@ -2296,13 +2380,12 @@ onActivated(() => {
       hasActivatedOnce = true
       return
     }
-    loadTab(activeTab.value)
+    profileStaleRefresh.check()
 })
 
 onMounted(async () => {
     syncSeededNoteOrderIds()
     window.addEventListener('storage', handleSeededOrderStorageChange)
-    window.addEventListener('focus', handleProfileFocus)
     countdownTimer = window.setInterval(() => {
       nowTimestamp.value = Date.now()
     }, 1000)
@@ -2326,8 +2409,9 @@ onMounted(async () => {
     requestAnimationFrame(() => {
       tabBarReady.value = true
     })
-    loadTab(activeTab.value)
-    loadFollowStats()
+    await loadTab(activeTab.value)
+    await loadFollowStats()
+    profileStaleRefresh.markFresh()
     if (userStore.isLoggedIn && route.query?.orderId) {
       await openOrderDetailFromRoute(route.query.orderId)
     }
@@ -2335,7 +2419,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('storage', handleSeededOrderStorageChange)
-  window.removeEventListener('focus', handleProfileFocus)
   if (countdownTimer) {
     window.clearInterval(countdownTimer)
     countdownTimer = null

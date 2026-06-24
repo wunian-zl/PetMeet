@@ -194,13 +194,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { CircleCheck, Star, Edit, VideoPlay } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
 import { getImageUrl, getAvatarUrl } from '@/utils/image'
 import { useUserStore } from '@/store/user'
+import { STALE_REFRESH_MS, useStaleRefresh } from '@/utils/staleRefresh'
 
 const route = useRoute()
 const router = useRouter()
@@ -295,7 +296,6 @@ const notesTitle = computed(() => {
 
 let detailRequestToken = 0
 let notesRequestToken = 0
-let refreshIntervalId = null
 
 const normalizeDetailImgs = (detailImgs) => {
   if (!detailImgs) return []
@@ -360,12 +360,15 @@ const handleDeleteReview = async (review) => {
 }
 
 // 获取商品详情
-const fetchProductDetail = async (id = currentProductId.value) => {
+const fetchProductDetail = async (id = currentProductId.value, options = {}) => {
   if (!id) return
+  const { silent = false } = options
   const requestToken = ++detailRequestToken
-  loading.value = true
+  if (!silent) {
+    loading.value = true
+  }
   try {
-    const res = await request.get(`/product/detail/${id}`)
+    const res = await request.get(`/product/detail/${id}`, { silentError: silent })
     if (requestToken !== detailRequestToken) return
     if (res) {
       // 注意：detailImgs 可能是 JSON 字符串或数组；这里保持原样交给 computed 做统一处理
@@ -373,11 +376,11 @@ const fetchProductDetail = async (id = currentProductId.value) => {
       currentImage.value = productImages.value[0]
     }
   } catch (error) {
-    if (requestToken === detailRequestToken) {
+    if (!silent && requestToken === detailRequestToken) {
       ElMessage.error('获取商品详情失败')
     }
   } finally {
-    if (requestToken === detailRequestToken) {
+    if (!silent && requestToken === detailRequestToken) {
       loading.value = false
     }
   }
@@ -535,19 +538,23 @@ const openNote = (id) => {
 }
 
 // 获取关联笔记（含兜底策略）
-const fetchRelatedNotes = async (id = currentProductId.value) => {
+const fetchRelatedNotes = async (id = currentProductId.value, options = {}) => {
+  const { silent = false } = options
   if (!id) {
     relatedNotes.value = []
     notesLoading.value = false
     return
   }
   const requestToken = ++notesRequestToken
-  notesLoading.value = true
+  if (!silent) {
+    notesLoading.value = true
+  }
   
   try {
     // 仅获取该商品关联笔记
     const res = await request.get('/note/list', {
-      params: { productId: id, pageNum: 1, pageSize: 4 }
+      params: { productId: id, pageNum: 1, pageSize: 4 },
+      silentError: silent
     })
     if (requestToken !== notesRequestToken) return
     
@@ -556,9 +563,11 @@ const fetchRelatedNotes = async (id = currentProductId.value) => {
   } catch (error) {
     if (requestToken !== notesRequestToken) return
     console.error('获取笔记失败', error)
-    relatedNotes.value = []
+    if (!silent) {
+      relatedNotes.value = []
+    }
   } finally {
-    if (requestToken === notesRequestToken) {
+    if (!silent && requestToken === notesRequestToken) {
       notesLoading.value = false
     }
   }
@@ -581,15 +590,30 @@ const goPublish = () => {
   })
 }
 
-const refreshIfVisible = () => {
-  if (document.visibilityState === 'visible') {
-    fetchProductDetail()
-    fetchRelatedNotes()
-  }
+const restoreWindowScroll = async (scrollTop) => {
+  await new Promise((resolve) => requestAnimationFrame(resolve))
+  const maxScrollTop = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+  window.scrollTo(0, Math.min(scrollTop, maxScrollTop))
 }
 
-const handleVisibilityChange = () => refreshIfVisible()
-const handleWindowFocus = () => refreshIfVisible()
+const refreshProductDetailSilently = async () => {
+  const id = currentProductId.value
+  if (!id) return
+  const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0
+
+  await Promise.all([
+    fetchProductDetail(id, { silent: true }),
+    fetchRelatedNotes(id, { silent: true })
+  ])
+  await restoreWindowScroll(scrollTop)
+}
+
+const productStaleRefresh = useStaleRefresh({
+  staleMs: STALE_REFRESH_MS.detail,
+  refresh: refreshProductDetailSilently,
+  isRefreshing: () => loading.value || notesLoading.value,
+  shouldSkip: () => !currentProductId.value
+})
 
 watch(
   () => currentProductId.value,
@@ -602,26 +626,10 @@ watch(
     }
     fetchProductDetail(newId)
     fetchRelatedNotes(newId)
+    productStaleRefresh.markFresh()
   },
   { immediate: true }
 )
-
-onMounted(() => {
-  document.addEventListener('visibilitychange', handleVisibilityChange)
-  window.addEventListener('focus', handleWindowFocus)
-  refreshIntervalId = window.setInterval(() => {
-    refreshIfVisible()
-  }, 30_000)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
-  window.removeEventListener('focus', handleWindowFocus)
-  if (refreshIntervalId) {
-    window.clearInterval(refreshIntervalId)
-    refreshIntervalId = null
-  }
-})
 </script>
 
 <style scoped lang="scss">

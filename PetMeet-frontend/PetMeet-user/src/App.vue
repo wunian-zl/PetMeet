@@ -4,27 +4,22 @@
 
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
-
-let hasHidden = false
-let reloading = false
+import { releaseDocumentScrollIfNoOverlay } from '@/utils/scrollLock'
 
 const handleVisibilityChange = () => {
-  if (document.visibilityState === 'hidden') {
-    hasHidden = true
-    return
-  }
-  if (document.visibilityState === 'visible' && hasHidden && !reloading) {
-    reloading = true
-    window.location.reload()
+  if (document.visibilityState === 'visible') {
+    releaseDocumentScrollIfNoOverlay()
   }
 }
 
 onMounted(() => {
   document.addEventListener('visibilitychange', handleVisibilityChange)
+  window.addEventListener('pageshow', releaseDocumentScrollIfNoOverlay)
 })
 
 onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('pageshow', releaseDocumentScrollIfNoOverlay)
 })
 </script>
 

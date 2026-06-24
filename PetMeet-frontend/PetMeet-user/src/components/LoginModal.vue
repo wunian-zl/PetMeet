@@ -7,6 +7,7 @@
     modal-class="login-overlay"
     align-center
     destroy-on-close
+    @close="handleClosing"
     @closed="handleClosed"
   >
     <div class="login-container">
@@ -172,6 +173,7 @@ import { Close, User, Lock, View, Hide } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import request from '@/utils/request'
 import loginPosterUrl from '@/assets/login-poster.jpg'
+import { releaseDocumentScrollIfNoOverlay } from '@/utils/scrollLock'
 
 const userStore = useUserStore()
 const route = useRoute()
@@ -217,7 +219,16 @@ const registerForm = ref({
   email: ''
 })
 
+const notifyLoginModalClosing = () => {
+  window.dispatchEvent(new CustomEvent('petmeet:login-modal-closing'))
+}
+
+const handleClosing = () => {
+  notifyLoginModalClosing()
+}
+
 const handleCloseClick = () => {
+  notifyLoginModalClosing()
   userStore.loginRedirect = ''
   userStore.hideLogin()
 }
@@ -226,6 +237,7 @@ const handleClosed = () => {
   if (!userStore.isLoggedIn && authEntryPaths.includes(route.path) && !userStore.loginRedirect) {
     router.replace('/')
   }
+  releaseDocumentScrollIfNoOverlay()
 }
 
 const goAfterAuth = () => {

@@ -146,6 +146,7 @@ import { Search, Loading, Bell, ShoppingCart } from '@element-plus/icons-vue'
 import ShopProductCard from '@/components/ShopProductCard.vue'
 import request from '@/utils/request'
 import { getImageUrl } from '@/utils/image'
+import { STALE_REFRESH_MS, useStaleRefresh } from '@/utils/staleRefresh'
 
 const BANNER_POSITION = 'SHOP_HERO'
 const bannerBgPresets = [
@@ -212,9 +213,10 @@ const resolveCategoryIcon = (cat, index) => {
 const categories = ref([])
 const router = useRouter()
 
-const fetchShopBanners = async () => {
+const fetchShopBanners = async (options = {}) => {
+  const { silent = false } = options
   try {
-    const res = await request.get(`/banner/position/${BANNER_POSITION}`)
+    const res = await request.get(`/banner/position/${BANNER_POSITION}`, { silentError: silent })
     if (Array.isArray(res) && res.length > 0) {
       banners.value = res.map((b, idx) => ({
         id: b.id,
@@ -229,7 +231,9 @@ const fetchShopBanners = async () => {
       banners.value = [...fallbackBanners]
     }
   } catch (e) {
-    banners.value = [...fallbackBanners]
+    if (!silent) {
+      banners.value = [...fallbackBanners]
+    }
   }
 }
 
@@ -281,10 +285,12 @@ const isLoading = ref(false)
 const hasMore = ref(true)
 const pageNum = ref(1)
 const total = ref(0)
+let bestSellersRequesting = false
 // 商城首页把分类、新品和热销分开拉取，任何一块失败都不影响另外两块。
-const fetchCategories = async () => {
+const fetchCategories = async (options = {}) => {
+  const { silent = false } = options
   try {
-    const res = await request.get('/product/category/list')
+    const res = await request.get('/product/category/list', { silentError: silent })
     if (res && res.length > 0) {
       categories.value = res.slice(0, 6).map((cat, index) => ({
         id: cat.id,
@@ -331,10 +337,12 @@ const refreshNewArrivals = () => {
   newArrivals.value = shuffled.slice(0, 5)
 }
 
-const fetchNewArrivals = async () => {
+const fetchNewArrivals = async (options = {}) => {
+  const { silent = false } = options
   try {
     const res = await request.get('/product/list', { 
-      params: { pageNum: 1, pageSize: 20 } 
+      params: { pageNum: 1, pageSize: 20 },
+      silentError: silent
     })
     if (res && res.records) {
       newArrivalPool.value = res.records.map(mapProduct)
@@ -346,13 +354,18 @@ const fetchNewArrivals = async () => {
 }
 
 // 获取热销商品
-const fetchBestSellers = async (append = false) => {
-  if (isLoading.value) return
+const fetchBestSellers = async (append = false, options = {}) => {
+  if (bestSellersRequesting) return
   
-  isLoading.value = true
+  const { silent = false, pageSize: fetchPageSize = 8 } = options
+  bestSellersRequesting = true
+  if (!silent) {
+    isLoading.value = true
+  }
   try {
     const res = await request.get('/product/list', { 
-      params: { pageNum: pageNum.value, pageSize: 8 } 
+      params: { pageNum: pageNum.value, pageSize: fetchPageSize },
+      silentError: silent
     })
     
     if (res && res.records) {
@@ -371,13 +384,16 @@ const fetchBestSellers = async (append = false) => {
   } catch (error) {
     console.error('获取热销商品失败', error)
   } finally {
-    isLoading.value = false
+    bestSellersRequesting = false
+    if (!silent) {
+      isLoading.value = false
+    }
   }
 }
 
 // 加载更多商品
 const loadMoreProducts = () => {
-  if (isLoading.value || !hasMore.value) return
+  if (bestSellersRequesting || isLoading.value || !hasMore.value) return
   pageNum.value++
   fetchBestSellers(true)
 }
@@ -415,6 +431,34 @@ const goToCategory = (cat) => {
   })
 }
 
+const restoreWindowScroll = async (scrollTop) => {
+  await new Promise((resolve) => requestAnimationFrame(resolve))
+  const maxScrollTop = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+  window.scrollTo(0, Math.min(scrollTop, maxScrollTop))
+}
+
+const refreshShopHomeData = async () => {
+  const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0
+  const originalPageSize = 8
+  const refreshSize = Math.max(originalPageSize, bestSellers.value.length || originalPageSize)
+
+  pageNum.value = 1
+  await Promise.all([
+    fetchShopBanners({ silent: true }),
+    fetchCategories({ silent: true }),
+    fetchNewArrivals({ silent: true }),
+    fetchBestSellers(false, { silent: true, pageSize: refreshSize })
+  ])
+  pageNum.value = Math.max(1, Math.ceil((bestSellers.value.length || 1) / originalPageSize))
+  await restoreWindowScroll(scrollTop)
+}
+
+const shopStaleRefresh = useStaleRefresh({
+  staleMs: STALE_REFRESH_MS.commerce,
+  refresh: refreshShopHomeData,
+  isRefreshing: () => bestSellersRequesting || isLoading.value
+})
+
 onMounted(async () => {
   window.addEventListener('scroll', handleScroll)
   // 并行加载数据
@@ -424,25 +468,7 @@ onMounted(async () => {
     fetchNewArrivals(),
     fetchBestSellers(false)
   ])
-
-  // 切回页面时自动刷新一次（方案一）
-  const refreshIfVisible = () => {
-    if (document.visibilityState !== 'visible') return
-    pageNum.value = 1
-    fetchNewArrivals()
-    fetchBestSellers(false)
-  }
-
-  const handleVisibilityChange = () => refreshIfVisible()
-  const handleWindowFocus = () => refreshIfVisible()
-
-  document.addEventListener('visibilitychange', handleVisibilityChange)
-  window.addEventListener('focus', handleWindowFocus)
-
-  onUnmounted(() => {
-    document.removeEventListener('visibilitychange', handleVisibilityChange)
-    window.removeEventListener('focus', handleWindowFocus)
-  })
+  shopStaleRefresh.markFresh()
 })
 
 onUnmounted(() => {

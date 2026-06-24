@@ -75,11 +75,12 @@ export default {
 </script>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowDown, Top, Bottom } from '@element-plus/icons-vue'
 import ShopProductCard from '@/components/ShopProductCard.vue'
 import request from '@/utils/request'
+import { STALE_REFRESH_MS, useStaleRefresh } from '@/utils/staleRefresh'
 
 const route = useRoute()
 const router = useRouter()
@@ -143,10 +144,11 @@ const total = ref(0)
 const loading = ref(false)
 const hasLoaded = ref(false)
 const productList = ref([])
+let productsRequesting = false
 
 // 计算属性
 const noMore = computed(() => hasLoaded.value && productList.value.length >= total.value)
-const disabled = computed(() => !hasLoaded.value || loading.value || noMore.value)
+const disabled = computed(() => !hasLoaded.value || loading.value || productsRequesting || noMore.value)
 
 const matchPriceRange = (product, range) => {
   if (range === 'all') return true
@@ -175,17 +177,21 @@ const displayList = computed(() => {
 })
 
 // 从后端拉商品列表
-const fetchProducts = async (append = false) => {
-  if (loading.value) return
+const fetchProducts = async (append = false, options = {}) => {
+  if (productsRequesting) return
   
-  loading.value = true
-  if (!append) {
+  const { silent = false, pageSize: fetchPageSize = pageSize.value } = options
+  productsRequesting = true
+  if (!silent) {
+    loading.value = true
+  }
+  if (!append && !silent) {
     hasLoaded.value = false
   }
   try {
     const params = {
       pageNum: pageNum.value,
-      pageSize: pageSize.value
+      pageSize: fetchPageSize
     }
     
     // 可选筛选参数
@@ -199,7 +205,7 @@ const fetchProducts = async (append = false) => {
       params.recentDays = effectiveRecentDays.value
     }
     
-    const res = await request.get('/product/list', { params })
+    const res = await request.get('/product/list', { params, silentError: silent })
     
     if (res) {
       // 后端返回 Page 对象
@@ -224,14 +230,17 @@ const fetchProducts = async (append = false) => {
   } catch (error) {
     console.error('获取商品列表失败', error)
   } finally {
-    loading.value = false
+    productsRequesting = false
+    if (!silent) {
+      loading.value = false
+    }
     hasLoaded.value = true
   }
 }
 
 // 加载更多（无限滚动）
 const loadMore = () => {
-  if (!hasLoaded.value || noMore.value || loading.value) return
+  if (!hasLoaded.value || noMore.value || loading.value || productsRequesting) return
   pageNum.value++
   fetchProducts(true)
 }
@@ -241,6 +250,29 @@ watch([categoryIds, keyword, effectiveRecentDays], () => {
   pageNum.value = 1
   hasLoaded.value = false
   fetchProducts(false)
+})
+
+const restoreWindowScroll = async (scrollTop) => {
+  await new Promise((resolve) => requestAnimationFrame(resolve))
+  const maxScrollTop = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+  window.scrollTo(0, Math.min(scrollTop, maxScrollTop))
+}
+
+const refreshCurrentProducts = async () => {
+  const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0
+  const originalPageSize = pageSize.value
+  const refreshSize = Math.max(originalPageSize, productList.value.length || originalPageSize)
+
+  pageNum.value = 1
+  await fetchProducts(false, { silent: true, pageSize: refreshSize })
+  pageNum.value = Math.max(1, Math.ceil((productList.value.length || 1) / originalPageSize))
+  await restoreWindowScroll(scrollTop)
+}
+
+const shopListStaleRefresh = useStaleRefresh({
+  staleMs: STALE_REFRESH_MS.commerce,
+  refresh: refreshCurrentProducts,
+  isRefreshing: () => loading.value || productsRequesting
 })
 
 onMounted(() => {
@@ -253,24 +285,7 @@ onMounted(() => {
     router.replace({ query: nextQuery })
   }
   fetchProducts(false)
-
-  // 切回页面时自动刷新一次（方案一）
-  const refreshIfVisible = () => {
-    if (document.visibilityState === 'visible') {
-      pageNum.value = 1
-      fetchProducts(false)
-    }
-  }
-  const handleVisibilityChange = () => refreshIfVisible()
-  const handleWindowFocus = () => refreshIfVisible()
-
-  document.addEventListener('visibilitychange', handleVisibilityChange)
-  window.addEventListener('focus', handleWindowFocus)
-
-  onUnmounted(() => {
-    document.removeEventListener('visibilitychange', handleVisibilityChange)
-    window.removeEventListener('focus', handleWindowFocus)
-  })
+  shopListStaleRefresh.markFresh()
 })
 </script>
 

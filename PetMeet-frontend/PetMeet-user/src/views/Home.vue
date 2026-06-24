@@ -10,7 +10,7 @@
             :placeholder="searchPlaceholder"
             clearable
             :readonly="searchLocked"
-            @focus="handleSearchFocus"
+            @click="handleSearchClick"
             @keyup.enter="handleSearch"
           >
             <template #prefix>
@@ -159,6 +159,7 @@ import request from '@/utils/request'
 import { getImageUrl, getAvatarUrl } from '@/utils/image'
 import { useUserStore } from '@/store/user'
 import { ElMessage } from 'element-plus'
+import { STALE_REFRESH_MS, useStaleRefresh } from '@/utils/staleRefresh'
 
 const router = useRouter()
 const route = useRoute()
@@ -185,6 +186,8 @@ const loadMoreSentinel = ref(null)
 let loadMoreObserver = null
 let closeDetailTimer = null
 let coverCompletionTimer = null
+let lastSearchLoginPromptAt = 0
+let searchLoginMessage = null
 
 // 详情弹窗状态
 const showDetail = ref(false)
@@ -311,9 +314,10 @@ const handleResize = throttle(() => {
 
 
 // 获取笔记列表
-const fetchNotes = async (append = false) => {
+const fetchNotes = async (append = false, options = {}) => {
   if (loading.value) return
   
+  const { silent = false } = options
   let loadedCount = 0
   loading.value = true
   try {
@@ -329,7 +333,8 @@ const fetchNotes = async (append = false) => {
         category,
         tag: activeTag.value || undefined,
         recommended: isRecommendedScope ? true : undefined
-      }
+      },
+      silentError: silent
     })
     
     if (res) {
@@ -411,22 +416,49 @@ const syncQueryToUrl = () => {
   })
 }
 
-const handleSearch = () => {
+const blurSearchInput = (event) => {
+  const target = event?.target
+  const input = target?.closest?.('.search-input')?.querySelector?.('input') || target
+  input?.blur?.()
+}
+
+const closeSearchLoginMessage = () => {
+  searchLoginMessage?.close?.()
+  searchLoginMessage = null
+}
+
+const promptSearchLogin = (event, type = 'warning') => {
   if (searchLocked.value) {
-    ElMessage.warning('请登录后搜索更多笔记')
+    const now = Date.now()
+    if (now - lastSearchLoginPromptAt > 800) {
+      closeSearchLoginMessage()
+      searchLoginMessage = ElMessage({
+        type,
+        message: '请登录后搜索更多笔记',
+        grouping: true,
+        duration: 1200,
+        onClose: () => {
+          searchLoginMessage = null
+        }
+      })
+      lastSearchLoginPromptAt = now
+    }
+    blurSearchInput(event)
     userStore.showLogin()
-    return
+    return true
   }
+  return false
+}
+
+const handleSearch = (event) => {
+  if (promptSearchLogin(event, 'warning')) return
   pageNum.value = 1
   syncQueryToUrl()
   fetchNotes(false)
 }
 
-const handleSearchFocus = () => {
-  if (searchLocked.value) {
-    ElMessage.info('请登录后搜索更多笔记')
-    userStore.showLogin()
-  }
+const handleSearchClick = (event) => {
+  promptSearchLogin(event, 'info')
 }
 
 const handleSwitch = (key) => {
@@ -629,6 +661,36 @@ const handlePopState = () => {
    }
 }
 
+const restoreWindowScroll = async (scrollTop) => {
+  await nextTick()
+  const maxScrollTop = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+  window.scrollTo(0, Math.min(scrollTop, maxScrollTop))
+}
+
+const refreshCurrentHomeNotes = async () => {
+  const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0
+  const originalPageNum = pageNum.value
+  const originalPageSize = pageSize.value
+  const refreshSize = Math.max(originalPageSize, noteList.value.length || originalPageSize)
+
+  pageNum.value = 1
+  pageSize.value = refreshSize
+  try {
+    await fetchNotes(false, { silent: true })
+  } finally {
+    pageSize.value = originalPageSize
+    pageNum.value = Math.max(1, Math.ceil((noteList.value.length || 1) / originalPageSize))
+    await restoreWindowScroll(scrollTop)
+  }
+}
+
+const homeStaleRefresh = useStaleRefresh({
+  staleMs: STALE_REFRESH_MS.community,
+  refresh: refreshCurrentHomeNotes,
+  isRefreshing: () => loading.value,
+  shouldSkip: () => showDetail.value
+})
+
 onMounted(() => {
   const initQ = typeof route.query.q === 'string' ? route.query.q : ''
   if (initQ) {
@@ -638,7 +700,9 @@ onMounted(() => {
   waterfallCols.value = Array.from({ length: calculateColCount() }, () => [])
   
   fetchNotes(false)
+  homeStaleRefresh.markFresh()
   // 使用 passive 选项优化滚动性能
+  window.addEventListener('petmeet:login-modal-closing', closeSearchLoginMessage)
   window.addEventListener('scroll', handleScroll, { passive: true })
   window.addEventListener('popstate', handlePopState)
   window.addEventListener('resize', handleResize)
@@ -657,6 +721,8 @@ onUnmounted(() => {
     clearTimeout(coverCompletionTimer)
     coverCompletionTimer = null
   }
+  closeSearchLoginMessage()
+  window.removeEventListener('petmeet:login-modal-closing', closeSearchLoginMessage)
   window.removeEventListener('scroll', handleScroll)
   window.removeEventListener('popstate', handlePopState)
   window.removeEventListener('resize', handleResize)
@@ -674,6 +740,15 @@ watch(
       searchKeyword.value = q
       pageNum.value = 1
       fetchNotes(false)
+    }
+  }
+)
+
+watch(
+  () => userStore.loginVisible,
+  (visible) => {
+    if (!visible) {
+      closeSearchLoginMessage()
     }
   }
 )

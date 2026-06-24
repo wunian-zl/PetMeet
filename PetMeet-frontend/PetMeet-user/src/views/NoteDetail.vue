@@ -331,6 +331,7 @@ import request from '@/utils/request'
 import { submitComplaint as submitComplaintApi } from '@/api/complaint'
 import { getImageUrl, getAvatarUrl } from '@/utils/image'
 import { useUserStore } from '@/store/user'
+import { releaseDocumentScrollIfNoOverlay } from '@/utils/scrollLock'
 
 const router = useRouter()
 const route = useRoute()
@@ -1089,6 +1090,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.body.style.overflow = previousBodyOverflow || ''
   document.body.style.paddingRight = previousBodyPaddingRight || ''
+  releaseDocumentScrollIfNoOverlay()
   if (videoTimer) {
     clearTimeout(videoTimer)
     videoTimer = null
