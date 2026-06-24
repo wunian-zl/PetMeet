@@ -402,7 +402,7 @@ let previousBodyOverflow = ''
 let previousBodyPaddingRight = ''
 const landscapeMediaMap = reactive({})
 
-const OPEN_DURATION = 750
+const OPEN_DURATION = 620
 const CLOSE_DURATION = 300
 const EASING_OUT = 'cubic-bezier(0.16, 1, 0.3, 1)'
 const EASING_IN = 'cubic-bezier(0.4, 0, 1, 1)'
@@ -616,6 +616,12 @@ const handleFollow = async () => {
     } else {
        ElMessage.success("已取消关注")
     }
+    window.dispatchEvent(new CustomEvent('petmeet:follow-changed', {
+      detail: {
+        userId: note.value.userId,
+        followed: isFollowing.value
+      }
+    }))
   } catch (e) {
     // 失败就回滚
     isFollowing.value = originalFollowing
@@ -830,6 +836,21 @@ const handleCommentCountChange = (delta) => {
   note.value.commentCount = Math.max(0, Number(note.value.commentCount || 0) + Number(delta || 0))
 }
 
+const notifyNoteChanged = (eventName, extra = {}) => {
+  if (!note.value) return
+  window.dispatchEvent(new CustomEvent(eventName, {
+    detail: {
+      noteId: note.value.id,
+      userId: note.value.userId,
+      liked: note.value.liked,
+      likeCount: note.value.likeCount,
+      collected: note.value.collected,
+      collectCount: note.value.collectCount,
+      ...extra
+    }
+  }))
+}
+
 const handleLike = async () => {
   if (!note.value || likeBusy.value) return
   if (!requireLogin()) return
@@ -861,6 +882,7 @@ const handleLike = async () => {
         note.value.liked = Boolean(liked)
         note.value.likeCount = Math.max(0, (originalCount || 0) + (liked ? 1 : -1))
     }
+    notifyNoteChanged('petmeet:note-like-changed')
   } catch (e) {
     // 失败就回滚
     note.value.liked = originalLiked
@@ -893,6 +915,7 @@ const handleCollect = async () => {
         note.value.collected = Boolean(collected)
         note.value.collectCount = Math.max(0, (originalCount || 0) + (collected ? 1 : -1))
     }
+    notifyNoteChanged('petmeet:note-collect-changed')
   } catch (e) {
     // 失败就回滚
     note.value.collected = originalCollected
@@ -1025,21 +1048,21 @@ onMounted(() => {
     return
   }
 
-  // 先把透明度和圆角摆好，避免倒放位移前先闪到终点
-  el.style.opacity = '1'
+  el.style.opacity = '0.96'
+  el.style.transformOrigin = 'center center'
+  el.style.transition = 'none'
   el.style.borderRadius = `${FINAL_RADIUS}px`
 
   if (reduceMotion) {
+    el.style.opacity = '1'
+    el.style.transform = 'none'
     opening.value = false
     return
   }
 
-  // 这里走类似小红书的缩放展开：从卡片封面 FLIP 到详情弹窗
   if (props.originRect) {
     const start = props.originRect
     const finalRect = el.getBoundingClientRect()
-
-    // 宽高比不一致时用统一缩放，避免看起来像被硬拉伸
     const scaleX = start.width / finalRect.width
     const scaleY = start.height / finalRect.height
     const scale = Math.min(scaleX, scaleY)
@@ -1051,35 +1074,20 @@ onMounted(() => {
     const deltaX = startCx - finalCx
     const deltaY = startCy - finalCy
 
-    el.style.transformOrigin = 'center center'
-    el.style.transition = 'none'
-    el.style.borderRadius = `${FINAL_RADIUS}px`
     el.style.transform = `translate3d(${deltaX}px, ${deltaY}px, 0) scale3d(${scale}, ${scale}, 1)`
-
-    // 强制触发布局，让下一帧动画能稳定生效
-    // eslint-disable-next-line no-unused-expressions
-    el.offsetHeight
-
-    requestAnimationFrame(() => {
-      el.style.transition = `transform ${OPEN_DURATION}ms ${EASING_OUT}`
-      el.style.transform = 'none'
-    })
   } else {
-    // 路由直进来的情况，走一个简单的放大入场
-    const scale = 0.7
-    el.style.transformOrigin = 'center center'
-    el.style.transition = 'none'
-    el.style.borderRadius = `${FINAL_RADIUS}px`
-    el.style.transform = `translate3d(0, 40px, 0) scale3d(${scale}, ${scale}, 1)`
-
-    // eslint-disable-next-line no-unused-expressions
-    el.offsetHeight
-
-    requestAnimationFrame(() => {
-      el.style.transition = `transform ${OPEN_DURATION}ms ${EASING_OUT}`
-      el.style.transform = 'none'
-    })
+    el.style.transform = 'translate3d(0, 28px, 0) scale3d(0.82, 0.82, 1)'
   }
+
+  // 保留从卡片自然放大的感觉，但直接显示完整详情，避免先铺满一张图。
+  // eslint-disable-next-line no-unused-expressions
+  el.offsetHeight
+
+  requestAnimationFrame(() => {
+    el.style.transition = `transform ${OPEN_DURATION}ms ${EASING_OUT}, opacity 160ms ease`
+    el.style.opacity = '1'
+    el.style.transform = 'none'
+  })
 
   // 动画稳定后再把更重的 UI 挂上来，顺手淡入右侧信息区
   setTimeout(() => {

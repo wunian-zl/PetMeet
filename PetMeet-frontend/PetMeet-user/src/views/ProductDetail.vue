@@ -526,6 +526,7 @@ const buyNow = async () => {
       productId: product.value.id,
       quantity: quantity.value
     })
+    await userStore.fetchCartCount()
     router.push('/cart')
   } catch (error) {
     // 错误已在拦截器处理

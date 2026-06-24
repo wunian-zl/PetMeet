@@ -927,6 +927,7 @@ const loadFollowStats = async (options = {}) => {
     const res = await request.get(`/follow/count/${userStore.userInfo.id}`, { silentError: silent })
     followStats.followers = res?.followers || 0
     followStats.following = res?.following || 0
+    followStatsDirty.value = false
   } catch (e) {
     if (!silent) {
       followStats.followers = 0
@@ -1151,6 +1152,30 @@ const collectedNotes = ref([])
 const likedNotes = ref([])
 const loadingCollected = ref(false)
 const loadingLiked = ref(false)
+const myNotesDirty = ref(false)
+const collectedNotesDirty = ref(false)
+const likedNotesDirty = ref(false)
+const followStatsDirty = ref(false)
+const profileTabLoaded = reactive({
+  notes: false,
+  collections: false,
+  likes: false,
+  orders: false,
+  address: false
+})
+
+const resolveTabLoadOptions = (tab, options = {}) => ({
+  ...options,
+  silent: Boolean(options.silent || profileTabLoaded[tab])
+})
+
+const isProfileTabDirty = (tab) => {
+  if (tab === 'notes') return myNotesDirty.value
+  if (tab === 'collections') return collectedNotesDirty.value
+  if (tab === 'likes') return likedNotesDirty.value
+  return false
+}
+
 const getMyNotes = async (options = {}) => {
   const { silent = false } = options
   if (!silent) {
@@ -1159,6 +1184,8 @@ const getMyNotes = async (options = {}) => {
   try {
     const res = await request.get('/note/my', { silentError: silent })
     myNotes.value = Array.isArray(res) ? res : (res?.records || [])
+    profileTabLoaded.notes = true
+    myNotesDirty.value = false
   } catch (e) {
     if (!silent) {
       myNotes.value = []
@@ -1181,6 +1208,8 @@ const getCollectedNotes = async (options = {}) => {
       silentError: silent
     })
     collectedNotes.value = Array.isArray(res) ? res : (res?.records || [])
+    profileTabLoaded.collections = true
+    collectedNotesDirty.value = false
   } catch (e) {
     if (!silent) {
       collectedNotes.value = []
@@ -1203,6 +1232,8 @@ const getLikedNotes = async (options = {}) => {
       silentError: silent
     })
     likedNotes.value = Array.isArray(res) ? res : (res?.records || [])
+    profileTabLoaded.likes = true
+    likedNotesDirty.value = false
   } catch (e) {
     if (!silent) {
       likedNotes.value = []
@@ -2226,6 +2257,10 @@ const resetProfileData = () => {
     myNotes.value = []
     collectedNotes.value = []
     likedNotes.value = []
+    myNotesDirty.value = false
+    collectedNotesDirty.value = false
+    likedNotesDirty.value = false
+    followStatsDirty.value = false
     orderList.value = []
     afterSaleList.value = []
     addressList.value = []
@@ -2239,6 +2274,9 @@ const resetProfileData = () => {
     loadingOrders.value = false
     loadingAfterSale.value = false
     loadingAddress.value = false
+    Object.keys(profileTabLoaded).forEach((tab) => {
+      profileTabLoaded[tab] = false
+    })
 }
 
 // 切换标签页时，按需加载对应数据
@@ -2247,19 +2285,27 @@ const loadTab = async (tab, options = {}) => {
         resetProfileData()
         return
     }
-    if (tab === 'notes') return getMyNotes(options)
-    else if (tab === 'collections') return getCollectedNotes(options)
-    else if (tab === 'likes') return getLikedNotes(options)
+    if (!options.silent && profileTabLoaded[tab] && !isProfileTabDirty(tab)) {
+        return
+    }
+    const loadOptions = resolveTabLoadOptions(tab, options)
+    if (tab === 'notes') return getMyNotes(loadOptions)
+    else if (tab === 'collections') return getCollectedNotes(loadOptions)
+    else if (tab === 'likes') return getLikedNotes(loadOptions)
     else if (tab === 'orders') {
         syncSeededNoteOrderIds()
-        await Promise.all([getOrders(options), getAfterSales(options)])
+        await Promise.all([getOrders(loadOptions), getAfterSales(loadOptions)])
+        profileTabLoaded.orders = true
         if (orderSubTab.value === 'after_sale') {
-          await markAfterSaleNoticesRead(options)
+          await markAfterSaleNoticesRead(loadOptions)
         } else {
-          await refreshAfterSaleUnreadCount(options)
+          await refreshAfterSaleUnreadCount(loadOptions)
         }
     }
-    else if (tab === 'address') return getAddressList(options)
+    else if (tab === 'address') {
+        await getAddressList(loadOptions)
+        profileTabLoaded.address = true
+    }
 }
 
 const handleTabClick = (pane) => {
@@ -2366,6 +2412,42 @@ const refreshCurrentProfileTab = async () => {
     ])
 }
 
+const handleCollectedNotesChanged = () => {
+    collectedNotesDirty.value = true
+}
+
+const handleLikedNotesChanged = () => {
+    likedNotesDirty.value = true
+}
+
+const handleMyNotesChanged = () => {
+    myNotesDirty.value = true
+}
+
+const handleFollowChanged = () => {
+    followStatsDirty.value = true
+}
+
+const refreshDirtyProfileData = async () => {
+    if (!userStore.isLoggedIn) return false
+    const tasks = []
+    if (followStatsDirty.value) {
+      tasks.push(loadFollowStats({ silent: true }))
+    }
+    if (activeTab.value === 'notes' && myNotesDirty.value && !loadingNotes.value) {
+      tasks.push(getMyNotes({ silent: true }))
+    }
+    if (activeTab.value === 'collections' && collectedNotesDirty.value && !loadingCollected.value) {
+      tasks.push(getCollectedNotes({ silent: true }))
+    }
+    if (activeTab.value === 'likes' && likedNotesDirty.value && !loadingLiked.value) {
+      tasks.push(getLikedNotes({ silent: true }))
+    }
+    if (tasks.length === 0) return false
+    await Promise.all(tasks)
+    return true
+}
+
 const profileStaleRefresh = useStaleRefresh({
   staleMs: STALE_REFRESH_MS.profile,
   refresh: refreshCurrentProfileTab,
@@ -2380,11 +2462,19 @@ onActivated(() => {
       hasActivatedOnce = true
       return
     }
-    profileStaleRefresh.check()
+    refreshDirtyProfileData().then((refreshed) => {
+      if (!refreshed) {
+        profileStaleRefresh.check()
+      }
+    })
 })
 
 onMounted(async () => {
     syncSeededNoteOrderIds()
+    window.addEventListener('petmeet:note-collect-changed', handleCollectedNotesChanged)
+    window.addEventListener('petmeet:note-like-changed', handleLikedNotesChanged)
+    window.addEventListener('petmeet:note-published', handleMyNotesChanged)
+    window.addEventListener('petmeet:follow-changed', handleFollowChanged)
     window.addEventListener('storage', handleSeededOrderStorageChange)
     countdownTimer = window.setInterval(() => {
       nowTimestamp.value = Date.now()
@@ -2418,6 +2508,10 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('petmeet:note-collect-changed', handleCollectedNotesChanged)
+  window.removeEventListener('petmeet:note-like-changed', handleLikedNotesChanged)
+  window.removeEventListener('petmeet:note-published', handleMyNotesChanged)
+  window.removeEventListener('petmeet:follow-changed', handleFollowChanged)
   window.removeEventListener('storage', handleSeededOrderStorageChange)
   if (countdownTimer) {
     window.clearInterval(countdownTimer)

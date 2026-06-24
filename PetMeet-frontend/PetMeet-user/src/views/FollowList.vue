@@ -87,6 +87,12 @@ const toggleFollow = async (user) => {
   try {
     const followed = await request.post(`/follow/${user.id}`)
     user.followed = Boolean(followed)
+    window.dispatchEvent(new CustomEvent('petmeet:follow-changed', {
+      detail: {
+        userId: user.id,
+        followed: user.followed
+      }
+    }))
     ElMessage.success(followed ? '关注成功' : '已取消关注')
   } catch (e) {
     // 这里交给拦截器统一处理

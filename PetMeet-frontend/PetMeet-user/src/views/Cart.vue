@@ -207,7 +207,8 @@ const deleteItem = async (id) => {
      })
      await request.delete(`/cart/delete/${id}`)
      ElMessage.success('已移出购物车')
-     getCartList()
+     await getCartList()
+     await userStore.fetchCartCount()
   } catch (e) {
      // 用户取消了，或者请求本身报错了
   }

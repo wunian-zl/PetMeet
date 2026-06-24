@@ -714,6 +714,7 @@ const handlePublish = async () => {
     }
 
     await request.post('/note/publish', payload)
+    window.dispatchEvent(new CustomEvent('petmeet:note-published'))
     markOrderSeedNotePublished()
     ElMessage.success('已发布！')
     router.push({ path: '/profile', query: { tab: 'notes' } })

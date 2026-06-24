@@ -151,7 +151,7 @@ export default {
 </script>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, onActivated, watch, computed, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Star, UserFilled, Search, VideoPlay, Loading, ArrowDown, CircleCheck } from '@element-plus/icons-vue'
 import NoteDetail from './NoteDetail.vue'
@@ -188,6 +188,7 @@ let closeDetailTimer = null
 let coverCompletionTimer = null
 let lastSearchLoginPromptAt = 0
 let searchLoginMessage = null
+const homeFeedDirty = ref(false)
 
 // 详情弹窗状态
 const showDetail = ref(false)
@@ -531,6 +532,24 @@ const findNoteById = (id) => {
   return noteList.value.find((item) => String(item?.id) === String(id)) || null
 }
 
+const applyNoteInteractionChange = (event) => {
+  const detail = event?.detail || {}
+  const note = findNoteById(detail.noteId)
+  if (!note) {
+    homeFeedDirty.value = true
+    return
+  }
+  ;['liked', 'likeCount', 'collected', 'collectCount', 'commentCount'].forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(detail, key)) {
+      note[key] = detail[key]
+    }
+  })
+}
+
+const markHomeFeedDirty = () => {
+  homeFeedDirty.value = true
+}
+
 const markCompletedCoverImage = (img) => {
   if (!img || !img.complete) return
   const note = findNoteById(img.dataset.noteId)
@@ -684,11 +703,26 @@ const refreshCurrentHomeNotes = async () => {
   }
 }
 
+const refreshDirtyHomeFeed = async () => {
+  if (!homeFeedDirty.value || showDetail.value || loading.value) return false
+  await refreshCurrentHomeNotes()
+  homeFeedDirty.value = false
+  return true
+}
+
 const homeStaleRefresh = useStaleRefresh({
   staleMs: STALE_REFRESH_MS.community,
   refresh: refreshCurrentHomeNotes,
   isRefreshing: () => loading.value,
   shouldSkip: () => showDetail.value
+})
+
+onActivated(() => {
+  refreshDirtyHomeFeed().then((refreshed) => {
+    if (!refreshed) {
+      homeStaleRefresh.check()
+    }
+  })
 })
 
 onMounted(() => {
@@ -703,6 +737,9 @@ onMounted(() => {
   homeStaleRefresh.markFresh()
   // 使用 passive 选项优化滚动性能
   window.addEventListener('petmeet:login-modal-closing', closeSearchLoginMessage)
+  window.addEventListener('petmeet:note-like-changed', applyNoteInteractionChange)
+  window.addEventListener('petmeet:note-collect-changed', applyNoteInteractionChange)
+  window.addEventListener('petmeet:note-published', markHomeFeedDirty)
   window.addEventListener('scroll', handleScroll, { passive: true })
   window.addEventListener('popstate', handlePopState)
   window.addEventListener('resize', handleResize)
@@ -723,6 +760,9 @@ onUnmounted(() => {
   }
   closeSearchLoginMessage()
   window.removeEventListener('petmeet:login-modal-closing', closeSearchLoginMessage)
+  window.removeEventListener('petmeet:note-like-changed', applyNoteInteractionChange)
+  window.removeEventListener('petmeet:note-collect-changed', applyNoteInteractionChange)
+  window.removeEventListener('petmeet:note-published', markHomeFeedDirty)
   window.removeEventListener('scroll', handleScroll)
   window.removeEventListener('popstate', handlePopState)
   window.removeEventListener('resize', handleResize)
