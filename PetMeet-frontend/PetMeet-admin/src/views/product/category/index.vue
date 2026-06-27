@@ -14,7 +14,13 @@
               <el-icon v-if="isIconComponent(row.icon)" :size="18">
                 <component :is="row.icon" />
               </el-icon>
-              <img v-else-if="row.icon" :src="row.icon" class="icon-img" />
+              <img
+                v-else-if="row.icon && !isCategoryIconFailed(row.icon)"
+                :src="resolveCategoryIcon(row.icon)"
+                class="icon-img"
+                alt=""
+                @error="handleCategoryIconError(row.icon)"
+              />
               <span v-else>-</span>
             </div>
           </template>
@@ -53,7 +59,14 @@
                             <el-icon v-if="!isIconUrl(item.value)">
                               <component :is="item.value" />
                             </el-icon>
-                            <img v-else :src="item.value" class="icon-img" />
+                            <img
+                              v-else-if="!isCategoryIconFailed(item.value)"
+                              :src="resolveCategoryIcon(item.value)"
+                              class="icon-img"
+                              alt=""
+                              @error="handleCategoryIconError(item.value)"
+                            />
+                            <span v-else class="icon-placeholder">-</span>
                             <span>{{ item.label }}</span>
                         </div>
                     </el-option>
@@ -80,6 +93,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getCategoryList, createCategory, updateCategory, deleteCategory } from '@/api/product'
+import { resolveImageUrl } from '@/utils/image'
 
 const loading = ref(false)
 const tableData = ref([])
@@ -113,9 +127,82 @@ const iconOptions = [
     { label: '智能设备（芯片/机器人）', value: '/category-icons/chip.svg' },
     { label: '智能设备（Wi-Fi碗）', value: '/category-icons/wifi-bowl.svg' }
 ]
-const isIconUrl = (icon) => typeof icon === 'string' && (icon.startsWith('http') || icon.startsWith('/'))
+const publicBase = import.meta.env.BASE_URL || '/'
+const legacyIconPathMap = new Map([
+    ['/images/cat-food.png', '/category-icons/cat-food.svg'],
+    ['/images/dog-food.png', '/category-icons/dog-food.svg'],
+    ['/images/snack.png', '/category-icons/snack.svg'],
+    ['/images/clean.png', '/category-icons/poop-bag.svg'],
+    ['/images/smart.png', '/category-icons/chip.svg'],
+    ['/images/travel.png', '/category-icons/carrier.svg']
+])
+
+const failedCategoryIcons = ref(new Set())
+const isIconUrl = (icon) => typeof icon === 'string' && (/^(https?:|data:|blob:)/.test(icon) || icon.startsWith('/'))
 const iconNameSet = new Set(iconOptions.map(i => i.value))
 const isIconComponent = (icon) => icon && iconNameSet.has(icon) && !isIconUrl(icon)
+
+const resolvePublicAsset = (path) => {
+    const base = publicBase.endsWith('/') ? publicBase.slice(0, -1) : publicBase
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`
+    return `${base}${normalizedPath}`
+}
+
+const normalizeLocalCategoryIconPath = (icon) => {
+    let path = icon.split(/[?#]/)[0].replace(/\\/g, '/')
+    path = path.replace(/^\/api(?=\/)/, '').replace(/^\/admin(?=\/)/, '')
+    if (!path.startsWith('/')) {
+        path = `/${path}`
+    }
+
+    return legacyIconPathMap.get(path) || path
+}
+
+const isLocalIconHost = (url) => {
+    const currentHost = window.location.hostname
+    return url.hostname === currentHost || ['localhost', '127.0.0.1', '::1'].includes(url.hostname)
+}
+
+const toCanonicalCategoryIcon = (icon) => {
+    if (typeof icon !== 'string') return ''
+
+    const value = icon.trim()
+    if (!value) return ''
+
+    if (/^(data:|blob:)/.test(value)) return value
+
+    if (/^https?:\/\//.test(value)) {
+        try {
+            const url = new URL(value)
+            const canonicalPath = normalizeLocalCategoryIconPath(url.pathname)
+            if (isLocalIconHost(url) && canonicalPath.startsWith('/category-icons/')) {
+                return canonicalPath
+            }
+            return value
+        } catch (e) {
+            return value
+        }
+    }
+
+    return normalizeLocalCategoryIconPath(value)
+}
+
+const resolveCategoryIcon = (icon) => {
+    const canonicalIcon = toCanonicalCategoryIcon(icon)
+    if (!canonicalIcon) return ''
+    if (/^(https?:|data:|blob:)/.test(canonicalIcon)) return canonicalIcon
+    if (canonicalIcon.startsWith('/category-icons/')) return resolvePublicAsset(canonicalIcon)
+    if (canonicalIcon.startsWith('/')) return resolveImageUrl(canonicalIcon)
+    return canonicalIcon
+}
+
+const getCategoryIconKey = (icon) => toCanonicalCategoryIcon(icon) || String(icon || '')
+const isCategoryIconFailed = (icon) => failedCategoryIcons.value.has(getCategoryIconKey(icon))
+const handleCategoryIconError = (icon) => {
+    const next = new Set(failedCategoryIcons.value)
+    next.add(getCategoryIconKey(icon))
+    failedCategoryIcons.value = next
+}
 
 const rules = {
     name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }]
@@ -129,6 +216,7 @@ const normalizeRows = (rows) => {
     return rows
         .map(item => ({
             ...item,
+            icon: toCanonicalCategoryIcon(item.icon || ''),
             status: item.status === 1
         }))
         .sort((a, b) => (a.sort || 0) - (b.sort || 0))
@@ -242,6 +330,14 @@ const handleDelete = (row) => {
     width: 18px;
     height: 18px;
     object-fit: contain;
+}
+
+.icon-placeholder {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
 }
 
 .icon-option {

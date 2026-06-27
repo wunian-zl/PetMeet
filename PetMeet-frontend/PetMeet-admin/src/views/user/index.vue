@@ -9,26 +9,26 @@
                     <el-input 
                         v-model="searchKeyword" 
                         placeholder="搜索昵称或手机号" 
-                        style="width: 200px" 
+                        class="filter-search"
                         clearable 
                         prefix-icon="Search"
                         @input="handleFilter"
                     />
                 </el-form-item>
                 <el-form-item label="角色">
-                    <el-select v-model="filterRole" placeholder="全部" style="width: 110px" clearable @change="handleFilter">
+                    <el-select v-model="filterRole" placeholder="全部" class="filter-select filter-select-role" clearable @change="handleFilter">
                         <el-option label="普通用户" value="user" />
                         <el-option label="管理员" value="admin" />
                     </el-select>
                 </el-form-item>
                 <el-form-item label="状态">
-                    <el-select v-model="filterStatus" placeholder="全部" style="width: 100px" clearable @change="handleFilter">
+                    <el-select v-model="filterStatus" placeholder="全部" class="filter-select filter-select-status" clearable @change="handleFilter">
                         <el-option label="正常" :value="1" />
                         <el-option label="封禁" :value="0" />
                     </el-select>
                 </el-form-item>
                 <el-form-item label="排序">
-                    <el-select v-model="sortOption" placeholder="请选择" style="width: 150px" @change="handleFilter">
+                    <el-select v-model="sortOption" placeholder="请选择" class="filter-sort" @change="handleFilter">
                        <el-option label="注册时间（最新）" value="createTime_desc" />
                        <el-option label="注册时间（最早）" value="createTime_asc" />
                        <el-option label="总消费（高到低）" value="totalSpent_desc" />
@@ -47,7 +47,7 @@
                         start-placeholder="开始日期"
                         end-placeholder="结束日期"
                         value-format="YYYY-MM-DD"
-                        style="width: 240px"
+                        class="filter-date-range"
                         @change="handleFilter"
                     />
                 </el-form-item>
@@ -62,13 +62,15 @@
 
   <!-- 表格区 -->
     <el-card shadow="never" class="table-card">
-      <el-table :data="tableData" style="width: 100%" v-loading="loading">
-        <el-table-column label="用户" min-width="180">
+      <el-table :data="tableData" class="user-table" style="width: 100%" v-loading="loading">
+        <el-table-column label="用户" min-width="190">
           <template #default="{ row }">
             <div class="user-info-cell">
               <el-avatar 
                 :src="resolveImageUrl(row.avatar)" 
                 :size="40" 
+                fit="cover"
+                class="user-avatar"
                 style="cursor: pointer" 
                 @click="openDetailDialog(row)" 
               />
@@ -82,16 +84,16 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="phone" label="手机号" width="115" />
+        <el-table-column prop="phone" label="手机号" width="120" />
  
-        <el-table-column label="角色" width="120" align="center">
+        <el-table-column label="角色" width="96" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.role === 'admin'" type="danger" effect="dark">管理员</el-tag>
             <el-tag v-else type="info" effect="plain">普通用户</el-tag>
           </template>
         </el-table-column>
  
-        <el-table-column label="用户标签" min-width="180" show-overflow-tooltip>
+        <el-table-column label="用户标签" min-width="130" show-overflow-tooltip>
              <template #default="{ row }">
                  <div style="display: flex; flex-wrap: wrap; gap: 4px;">
             <!-- 自动标签（带提示） -->
@@ -125,7 +127,7 @@
              </template>
          </el-table-column>
  
-        <el-table-column label="状态" width="100">
+        <el-table-column label="状态" width="84" align="center">
           <template #default="{ row }">
              <el-tooltip v-if="!row.status" :content="'封禁原因: ' + (row.banReason || '未填写')" placement="top">
                 <el-tag type="danger" size="small" effect="plain" style="cursor: help">已封禁</el-tag>
@@ -134,7 +136,7 @@
           </template>
         </el-table-column>
  
-        <el-table-column label="最后登录" width="160" sortable prop="lastLoginTime">
+        <el-table-column label="最后登录" width="145" sortable prop="lastLoginTime">
             <template #default="{ row }">
                 <div v-if="row.lastLoginTime">
                     <div>{{ row.lastLoginTime }}</div>
@@ -144,20 +146,22 @@
             </template>
         </el-table-column>
  
-        <el-table-column prop="createTime" label="注册时间" width="165" sortable />
+        <el-table-column prop="createTime" label="注册时间" width="150" sortable />
  
-        <el-table-column label="操作" width="180">
+        <el-table-column label="操作" width="128" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="openEditDialog(row)">编辑</el-button>
-            <el-button 
-                :type="row.status ? 'danger' : 'success'" 
-                link 
-                size="small"
-                @click="handleStatusAction(row)"
-            >
-                {{ row.status ? '封禁' : '解封' }}
-            </el-button>
-            <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+            <div class="row-actions">
+              <el-button type="primary" link size="small" @click="openEditDialog(row)">编辑</el-button>
+              <el-button
+                  :type="row.status ? 'danger' : 'success'"
+                  link
+                  size="small"
+                  @click="handleStatusAction(row)"
+              >
+                  {{ row.status ? '封禁' : '解封' }}
+              </el-button>
+              <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -181,7 +185,7 @@
       <el-form :model="form" label-width="80px" :rules="rules" ref="formRef">
         <el-form-item label="用户头像" style="margin-bottom: 20px;">
            <div style="display: flex; align-items: center; gap: 12px">
-               <el-avatar :src="resolveImageUrl(form.avatar)" :size="60" />
+               <el-avatar :src="resolveImageUrl(form.avatar)" :size="60" fit="cover" class="user-avatar" />
 
                <template v-if="form.id && isEditingSelf">
                  <el-upload
@@ -276,7 +280,7 @@
         <div v-if="currentUser" class="user-detail-content">
       <!-- 顶部信息 -->
             <div class="detail-header">
-                <el-avatar :src="resolveImageUrl(currentUser.avatar)" :size="80" />
+                <el-avatar :src="resolveImageUrl(currentUser.avatar)" :size="80" fit="cover" class="user-avatar" />
                 <div class="detail-basic">
                     <div class="d-name">{{ currentUser.username }} 
                         <el-tag size="small" :type="currentUser.role==='admin'?'danger':'info'">{{ currentUser.role === 'admin' ? 'admin' : 'user' }}</el-tag>
@@ -933,53 +937,152 @@ const handleSubmit = () => {
 <style scoped>
 .user-container {
     /* 外层留白交给父容器控制 */
+    min-width: 0;
 }
 .filter-card {
     margin-bottom: 20px;
 }
+.filter-card :deep(.el-card__body) {
+    padding: 16px 18px;
+}
 .filter-bar {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    min-width: 0;
 }
 .left-panel {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
+    flex: 1 1 720px;
+    min-width: 0;
 }
 .user-filter-form {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 12px 14px;
+    min-width: 0;
 }
 .user-filter-form :deep(.el-form-item) {
-    margin-bottom: 0px;
-    margin-right: 15px;
+    margin: 0;
 }
 .user-filter-form :deep(.el-form-item__label) {
     padding-right: 8px;
     font-weight: normal;
+    white-space: nowrap;
+}
+.filter-search {
+    width: 200px;
+}
+.filter-select-role {
+    width: 112px;
+}
+.filter-select-status {
+    width: 104px;
+}
+.filter-sort {
+    width: 168px;
+}
+.filter-date-range {
+    width: 280px;
+    max-width: 100%;
 }
 .right-panel {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+    margin-left: auto;
     gap: 12px;
+    white-space: nowrap;
+}
+.right-panel :deep(.el-button) {
+    margin-left: 0;
+}
+.table-card {
+    min-width: 0;
+}
+.table-card :deep(.el-card__body) {
+    min-width: 0;
+    overflow: hidden;
+}
+.user-table {
+    min-width: 0;
+}
+.user-table :deep(.el-table__cell) {
+    padding: 10px 0;
+}
+.user-table :deep(.el-table__fixed-right) {
+    box-shadow: -8px 0 12px -12px rgba(31, 45, 61, 0.45);
+}
+.row-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+.row-actions :deep(.el-button) {
+    margin-left: 0;
 }
 
 .user-info-cell {
     display: flex;
     align-items: center;
+    min-width: 0;
+    gap: 10px;
+}
+.user-avatar {
+    flex: 0 0 auto;
+    border-radius: 50%;
+    overflow: hidden;
+}
+.user-avatar :deep(img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
 }
 .info-text {
-    margin-left: 10px;
+    min-width: 0;
 }
 .nickname {
     font-weight: 500;
     font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .email {
     font-size: 12px;
     color: #909399;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
+@media (max-width: 1280px) {
+    .left-panel {
+        flex-basis: 100%;
+    }
+    .right-panel {
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 760px) {
+    .filter-search,
+    .filter-sort,
+    .filter-date-range {
+        width: min(100%, 320px);
+    }
+    .right-panel {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
 
 .pagination-bar {
     margin-top: 15px;

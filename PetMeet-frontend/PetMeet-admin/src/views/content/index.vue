@@ -326,10 +326,10 @@
 
         <el-table-column label="操作" width="120">
           <template #default="{ row }">
-            <div class="action-buttons">
+            <div class="action-buttons" :class="{ 'action-buttons-pending': row.status === 'pending' }">
                 <template v-if="row.status === 'pending'">
                   <el-button type="primary" size="small" @click="openDetailDialog(row)">审核</el-button>
-                        <el-button type="danger" link @click="handleSoftDelete(row)">删除</el-button>
+                  <el-button type="danger" link @click="handleSoftDelete(row)">删除</el-button>
                 </template>
                 <template v-else>
                   <el-button type="info" link @click="openDetailDialog(row)">详情</el-button>
@@ -343,6 +343,7 @@
                   </el-button>
                   <el-button
                     v-if="row.status !== 'admin_soft_deleted'"
+                    class="delete-action"
                     type="danger"
                     link
                     @click="handleSoftDelete(row)"
@@ -1599,6 +1600,29 @@ const handleSoftDelete = (row) => {
 :deep(.el-table .el-table__body .cell) {
   padding-top: 6px;
   padding-bottom: 6px;
+}
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, 34px);
+  justify-content: center;
+  justify-items: center;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 6px;
+}
+.action-buttons :deep(.el-button) {
+  min-width: 34px;
+  margin-left: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+.action-buttons .delete-action {
+  grid-column: 1 / -1;
+}
+.action-buttons-pending {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
 }
 
 /* 详情弹窗样式 */
