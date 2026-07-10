@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.petmeet.common.Result;
 import org.petmeet.dto.AfterSaleApplyDTO;
+import org.petmeet.dto.AfterSaleReturnLogisticsDTO;
 import org.petmeet.service.OmsAfterSaleService;
 import org.petmeet.vo.AfterSaleVO;
 import org.springframework.web.bind.annotation.*;
@@ -67,6 +68,13 @@ public class AfterSaleController {
         // 调用业务层完成售后流程
         afterSaleService.complete(id);
         return Result.success("售后已确认完成", null);
+    }
+
+    @PostMapping("/{id}/return-logistics")
+    @Operation(summary = "Submit return logistics")
+    public Result<Void> submitReturnLogistics(@PathVariable Long id, @Valid @RequestBody AfterSaleReturnLogisticsDTO dto) {
+        afterSaleService.submitReturnLogistics(id, dto);
+        return Result.success("退货物流已提交", null);
     }
 
     /**

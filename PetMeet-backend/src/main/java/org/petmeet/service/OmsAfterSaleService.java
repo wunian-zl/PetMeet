@@ -2,6 +2,7 @@ package org.petmeet.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import org.petmeet.dto.AfterSaleReturnLogisticsDTO;
 import org.petmeet.dto.AfterSaleApplyDTO;
 import org.petmeet.entity.OmsAfterSale;
 import org.petmeet.vo.AfterSaleVO;
@@ -16,4 +17,6 @@ public interface OmsAfterSaleService extends IService<OmsAfterSale> {
     void complete(Long id);
 
     void deleteMy(Long id);
+
+    void submitReturnLogistics(Long id, AfterSaleReturnLogisticsDTO dto);
 }

@@ -356,8 +356,21 @@ const props = defineProps({
 // 组件事件
 const emit = defineEmits(['close'])
 
+const normalizeInitialNote = (source) => {
+  if (!source) return null
+  const coverImg = source.coverImg ? getImageUrl(source.coverImg) : ''
+  const images = Array.isArray(source.images)
+    ? source.images.filter(Boolean).map((src) => getImageUrl(src))
+    : []
+  return {
+    ...source,
+    coverImg,
+    images: images.length > 0 ? images : (coverImg ? [coverImg] : [])
+  }
+}
+
 // 有 initialNote 时先秒开，细节数据再补
-const note = ref(props.initialNote ? { ...props.initialNote } : null)
+const note = ref(normalizeInitialNote(props.initialNote))
 const pendingNote = ref(null) // { note: object, id: string|number } applied after opening animation
 const loading = ref(!props.initialNote)
 const commentText = ref('')
@@ -400,6 +413,7 @@ const videoSrc = ref('')
 let videoTimer = null
 let previousBodyOverflow = ''
 let previousBodyPaddingRight = ''
+let mediaSwapToken = 0
 const landscapeMediaMap = reactive({})
 
 const OPEN_DURATION = 620
@@ -464,6 +478,85 @@ const handleMediaLoad = (event, src) => {
 }
 
 const isLandscapeMedia = (src) => Boolean(src && landscapeMediaMap[src])
+
+const getFirstMediaSrc = (source) => {
+  const images = Array.isArray(source?.images) ? source.images.filter(Boolean) : []
+  return images[0] || source?.coverImg || ''
+}
+
+const buildHeldMediaNote = (nextNote, currentNote) => {
+  const currentImages = Array.isArray(currentNote?.images)
+    ? currentNote.images.filter(Boolean).map((src) => getImageUrl(src))
+    : []
+  const currentCover = currentNote?.coverImg ? getImageUrl(currentNote.coverImg) : ''
+  return {
+    ...nextNote,
+    coverImg: currentCover || nextNote.coverImg,
+    images: currentImages
+  }
+}
+
+const shouldHoldCurrentMedia = (id, nextNote, detailImages) => {
+  if (!note.value || nextNote.type === 'video') return false
+  if (String(note.value.id) !== String(id)) return false
+  const currentSrc = getImageUrl(getFirstMediaSrc(note.value))
+  const nextSrc = getImageUrl(detailImages[0] || nextNote.coverImg)
+  return Boolean(currentSrc && nextSrc && currentSrc !== nextSrc)
+}
+
+const preloadImage = (src) => new Promise((resolve, reject) => {
+  if (!src) {
+    resolve('')
+    return
+  }
+  const img = new Image()
+  let settled = false
+  const finish = () => {
+    if (settled) return
+    settled = true
+    const decodeTask = typeof img.decode === 'function'
+      ? img.decode().catch(() => {})
+      : Promise.resolve()
+    decodeTask.then(() => resolve(src))
+  }
+  img.onload = finish
+  img.onerror = reject
+  img.src = src
+  if (img.complete && img.naturalWidth > 0) {
+    finish()
+  }
+})
+
+const waitForOpeningSettled = () => new Promise((resolve) => {
+  if (!opening.value) {
+    resolve()
+    return
+  }
+  window.setTimeout(resolve, OPEN_DURATION + 30)
+})
+
+const swapDetailMediaWhenReady = async (id, media, token) => {
+  const firstSrc = media.images[0] || media.coverImg
+  try {
+    await Promise.all([
+      preloadImage(firstSrc),
+      waitForOpeningSettled()
+    ])
+  } catch (e) {
+    return
+  }
+  media.images.slice(1).forEach((src) => {
+    preloadImage(src).catch(() => {})
+  })
+  if (token !== mediaSwapToken || String(activeNoteId.value) !== String(id) || !note.value) {
+    return
+  }
+  note.value = {
+    ...note.value,
+    coverImg: media.coverImg,
+    images: media.images
+  }
+}
 
 const handleClose = () => {
   if (closing.value) return
@@ -977,6 +1070,8 @@ const applyNotePayload = (nextNote, id) => {
 const fetchNote = async (id) => {
   if (!id) return
   pendingNote.value = null
+  mediaSwapToken += 1
+  const token = mediaSwapToken
   loading.value = true
   try {
     const res = await request.get(`/note/detail/${id}`)
@@ -1001,8 +1096,17 @@ const fetchNote = async (id) => {
       collected: Boolean(res.collected)
     }
 
-    // 直接应用数据，避免动画结束时再闪一下
-    applyNotePayload(nextNote, id)
+    const holdCurrentMedia = shouldHoldCurrentMedia(id, nextNote, mappedImages)
+    if (holdCurrentMedia) {
+      const media = {
+        coverImg: nextNote.coverImg,
+        images: mappedImages
+      }
+      applyNotePayload(buildHeldMediaNote(nextNote, note.value), id)
+      swapDetailMediaWhenReady(id, media, token)
+    } else {
+      applyNotePayload(nextNote, id)
+    }
   } finally {
     loading.value = false
   }

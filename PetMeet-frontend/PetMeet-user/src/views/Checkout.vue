@@ -131,7 +131,7 @@
 
         <div class="actions">
           <el-button class="back-btn" @click="router.push('/cart')">返回</el-button>
-          <el-button type="primary" class="submit-btn" :loading="submitting" @click="submitOrder">提交订单</el-button>
+          <el-button type="primary" class="submit-btn" :loading="submitting" :disabled="submitting" @click="submitOrder">提交订单</el-button>
         </div>
       </section>
     </div>
@@ -231,6 +231,7 @@ const selectAddress = (addr) => {
 }
 
 const submitOrder = async () => {
+  if (submitting.value) return
   if (!userStore.isLoggedIn) {
     ElMessage.warning('请先登录后再下单')
     userStore.showLogin()

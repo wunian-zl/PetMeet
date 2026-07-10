@@ -5,6 +5,7 @@ import org.petmeet.entity.OmsRefundLog;
 import org.petmeet.vo.PayResponseVO;
 import org.petmeet.vo.PayStatusVO;
 
+import java.math.BigDecimal;
 import java.util.Map;
 
 public interface PayService {
@@ -17,4 +18,6 @@ public interface PayService {
     String handleAlipayNotify(Map<String, String> params);
 
     OmsRefundLog refundOrder(Long orderId, Long afterSaleId, String reason);
+
+    OmsRefundLog refundOrder(Long orderId, Long afterSaleId, BigDecimal refundAmount, String reason);
 }

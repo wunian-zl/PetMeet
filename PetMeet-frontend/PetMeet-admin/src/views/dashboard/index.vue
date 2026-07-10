@@ -130,14 +130,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { useRouter } from 'vue-router'
-import { 
-  Money, ShoppingCart, User, Document, 
-  CaretTop, CaretBottom, ArrowRight,
-  Goods, Bell, Warning
-} from '@element-plus/icons-vue'
+import { Money, Document, ArrowRight, Goods, Bell, Warning } from '@element-plus/icons-vue'
 import * as dashboardApi from '@/api/dashboard'
 
 const router = useRouter()

@@ -160,31 +160,46 @@ WHERE `title`='陪伴型宠物日常随拍';
 UPDATE `pms_product`
 SET `name`='猫咪彩虹隧道加厚款',
     `sub_title`='可折叠收纳，适合钻洞、追逐和午休',
-    `description`='彩虹隧道展开后空间充足，适合猫咪日常穿梭和互动玩耍。'
+    `description`='彩虹隧道展开后空间充足，适合猫咪日常穿梭和互动玩耍。',
+    `cover_img`='/images/demo/products/cat-tunnel-detail.jpg',
+    `cover_imgs`=JSON_ARRAY('/images/demo/products/cat-tunnel-detail.jpg','/images/demo/products/cat-tunnel.jpg'),
+    `detail_imgs`=JSON_ARRAY('/images/demo/products/cat-tunnel.jpg')
 WHERE `name`='猫咪磨爪瓦楞板' AND `cover_img`='/images/demo/products/cat-tunnel.jpg';
 
 UPDATE `pms_product`
 SET `name`='宠物环境除味喷雾便携装',
     `sub_title`='适合猫砂盆和宠物活动区域日常清洁',
-    `description`='用于宠物活动区域的气味管理，清洁后保持通风干燥。'
+    `description`='用于宠物活动区域的气味管理，清洁后保持通风干燥。',
+    `cover_img`='/images/demo/products/pet-deodorizer-detail.jpg',
+    `cover_imgs`=JSON_ARRAY('/images/demo/products/pet-deodorizer-detail.jpg','/images/demo/products/pet-deodorizer.jpg'),
+    `detail_imgs`=JSON_ARRAY('/images/demo/products/pet-deodorizer.jpg')
 WHERE `name`='便携宠物拾便袋套装' AND `cover_img`='/images/demo/products/pet-deodorizer.jpg';
 
 UPDATE `pms_product`
 SET `name`='狗狗耐咬训练圆环加厚款',
     `sub_title`='适合抛接、拉扯和消耗精力',
-    `description`='弹性圆环适合主人和狗狗进行互动训练，日常玩耍后建议清洁晾干。'
+    `description`='弹性圆环适合主人和狗狗进行互动训练，日常玩耍后建议清洁晾干。',
+    `cover_img`='/images/demo/products/dog-ring-detail.jpg',
+    `cover_imgs`=JSON_ARRAY('/images/demo/products/dog-ring-detail.jpg','/images/demo/products/dog-ring.jpg'),
+    `detail_imgs`=JSON_ARRAY('/images/demo/products/dog-ring.jpg')
 WHERE `name`='狗狗训练响片' AND `cover_img`='/images/demo/products/dog-ring.jpg';
 
 UPDATE `pms_product`
 SET `name`='长杆羽毛逗猫棒替换装',
     `sub_title`='适合日常互动和消耗精力',
-    `description`='轻量长杆搭配羽毛逗猫头，适合室内陪玩和训练猫咪反应。'
+    `description`='轻量长杆搭配羽毛逗猫头，适合室内陪玩和训练猫咪反应。',
+    `cover_img`='/images/demo/products/cat-teaser-detail.jpg',
+    `cover_imgs`=JSON_ARRAY('/images/demo/products/cat-teaser-detail.jpg','/images/demo/products/cat-teaser.jpg'),
+    `detail_imgs`=JSON_ARRAY('/images/demo/products/cat-teaser.jpg')
 WHERE `name`='猫咪换季梳毛刷' AND `cover_img`='/images/demo/products/cat-teaser.jpg';
 
 UPDATE `pms_product`
 SET `name`='狗狗春季轻薄外套',
     `sub_title`='轻薄保暖，适合春秋短时外出',
-    `description`='柔软面料配合轻薄版型，适合小型犬短时外出和节日拍照。'
+    `description`='柔软面料配合轻薄版型，适合小型犬短时外出和节日拍照。',
+    `cover_img`='/images/demo/products/dog-spring-coat-light.jpg',
+    `cover_imgs`=JSON_ARRAY('/images/demo/products/dog-spring-coat-light.jpg','/images/demo/products/dog-spring-coat.jpg'),
+    `detail_imgs`=JSON_ARRAY('/images/demo/products/dog-spring-coat-detail.jpg')
 WHERE `name`='宠物外出折叠水碗' AND `cover_img`='/images/demo/products/dog-spring-coat.jpg';
 
 -- 4.新增演示用户。

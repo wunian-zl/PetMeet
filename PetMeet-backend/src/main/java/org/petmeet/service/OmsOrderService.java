@@ -20,6 +20,8 @@ public interface OmsOrderService extends IService<OmsOrder> {
 
     void cancel(Long orderId);
 
+    void cancelRefund(Long orderId);
+
     void confirmReceipt(Long orderId);
 
     void review(Long orderId, OrderReviewDTO dto);

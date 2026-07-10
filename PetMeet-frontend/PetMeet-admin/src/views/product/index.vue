@@ -1,344 +1,36 @@
 <template>
   <div class="product-container">
-  <!-- 筛选与操作 -->
-    <el-card class="filter-card" shadow="never">
-      <div class="filter-wrapper">
-    <!-- 左侧：筛选项 -->
-        <el-form :inline="true" class="filter-form">
-          <el-form-item label="关键词">
-             <el-input v-model="searchKeyword" placeholder="商品名称 / ID" prefix-icon="Search" clearable @input="handleFilter" style="width: 180px"/>
-          </el-form-item>
-          <el-form-item label="商品分类">
-            <el-select v-model="filterCategory" placeholder="全部分类" style="width: 140px" clearable @change="handleFilter">
-              <el-option 
-                v-for="item in categoryOptions" 
-                :key="item.id" 
-                :label="item.name" 
-                :value="item.id" 
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="状态">
-             <el-select v-model="filterStatus" placeholder="全部" style="width: 100px" clearable @change="handleFilter">
-                <el-option label="已上架" :value="1" />
-                <el-option label="已下架" :value="0" />
-             </el-select>
-          </el-form-item>
-          <el-form-item label="库存状态">
-             <el-select v-model="filterStockStatus" placeholder="全部" style="width: 110px" clearable @change="handleFilter">
-                <el-option label="库存紧张" value="warning" />
-                <el-option label="无库存" value="empty" />
-                <el-option label="充足" value="normal" />
-             </el-select>
-          </el-form-item>
-          <el-form-item label="标签">
-             <el-select v-model="filterTag" placeholder="全部" style="width: 100px" clearable @change="handleFilter">
-                <el-option label="热卖" value="hot" />
-             </el-select>
-          </el-form-item>
-          <el-form-item label="排序">
-             <el-select v-model="sortOption" placeholder="默认排序" style="width: 140px" @change="handleFilter">
-                <el-option label="默认 (权重+ID)" value="default" />
-                <el-option label="权重优先" value="weight_desc" />
-                <el-option label="销量高到低" value="sales_desc" />
-                <el-option label="价格低到高" value="price_asc" />
-                <el-option label="价格高到低" value="price_desc" />
-                <el-option label="库存少到多" value="stock_asc" />
-             </el-select>
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" link @click="resetFilter">重置</el-button>
-          </el-form-item>
-        </el-form>
-        
-    <!-- 右侧：操作区 -->
-        <div class="action-group">
-            <el-dropdown v-if="selectedRows.length > 0" @command="handleBatchCommand" style="margin-right: 12px">
-              <el-button type="primary" plain>
-                批量操作 ({{ selectedRows.length }}) <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-              </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="on">批量上架</el-dropdown-item>
-                  <el-dropdown-item command="off">批量下架</el-dropdown-item>
-                  <el-dropdown-item command="set_hot">批量设为热卖</el-dropdown-item>
-                  <el-dropdown-item command="delete" divided style="color: #F56C6C">批量删除</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-            <el-button type="primary" icon="Plus" @click="openDialog('create')">新增商品</el-button>
-        </div>
-      </div>
-    </el-card>
-
-  <!-- 数据表格 -->
-    <el-card shadow="never">
-      <el-table 
-        :data="tableData" 
-        style="width: 100%" 
-        :row-class-name="tableRowClassName" 
-        v-loading="loading"
-        :empty-text="emptyText"
-        @selection-change="handleSelectionChange"
-      >
-        <el-table-column type="selection" width="55" />
-        <el-table-column label="主图" width="100">
-          <template #default="{ row }">
-            <el-image 
-              :src="resolveImageUrl(row.cover)" 
-              style="width: 60px; height: 60px; border-radius: 4px" 
-              fit="cover" 
-              :preview-src-list="[resolveImageUrl(row.cover)]" 
-              :hide-on-click-modal="true"
-              preview-teleported 
-            >
-                <template #error>
-                    <div style="width: 100%; height: 100%; background: #f5f7fa; display: flex; justify-content: center; align-items: center; color: #909399">
-                        <el-icon><Picture /></el-icon>
-                    </div>
-                </template>
-            </el-image>
-          </template>
-        </el-table-column>
-        <el-table-column label="商品信息" min-width="250">
-          <template #default="{ row }">
-            <div class="product-name" style="cursor: pointer" @click="openDialog('edit', row)">
-              <div class="main-title">
-                  {{ row.name }} 
-                  <span style="font-size: 12px; color: #909399; font-weight: normal; margin-left: 5px">
-                      (ID: {{ row.id }})
-                  </span>
-              </div>
-              <div class="sub-title">{{ row.subtitle }}</div>
-      <!-- 3. 标签 -->
-              <div class="tags-row" style="margin-top: 5px;">
-                  <el-tag v-if="row.sales > 500" size="small" type="danger" effect="plain" style="margin-right: 5px">热卖</el-tag>
-                  <el-tag v-if="row.stock === 0" size="small" type="danger" effect="dark" style="margin-right: 5px">无库存</el-tag>
-                  <el-tag v-else-if="row.stock <= (row.warningStock || 10)" size="small" type="warning" effect="plain" style="margin-right: 5px">库存紧张</el-tag>
-                  <el-tag v-if="!row.status" size="small" type="info" effect="plain">已下架</el-tag>
-              </div>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="数据概览" width="150">
-           <template #default="{ row }">
-               <div style="font-size: 13px; line-height: 1.6;">
-                   <div style="color: #F56C6C; font-weight: bold; font-size: 15px;">
-                     ¥{{ row.price }} <span style="font-size: 12px; font-weight: normal; color: #909399">/ {{ row.unit || '件' }}</span>
-                   </div>
-                    <div style="color: #606266;">库存: {{ row.stock }}</div>
-                    <div style="color: #909399; font-size: 12px; display: flex; gap: 8px;">
-                        <span>销量: {{ row.sales || 0 }}</span>
-                        <span>浏览: {{ row.views || 0 }}</span>
-                    </div>
-                    <div style="color: #909399; font-size: 12px;">
-                        笔记关联: {{ row.relatedNoteCount || 0 }} <span v-if="row.relatedNoteCount > 10" style="color: #F56C6C">🔥</span>
-                    </div>
-                </div>
-           </template>
-        </el-table-column>
-        <el-table-column label="上架状态" width="100">
-          <template #default="{ row }">
-      <!-- 4. 上下架切换（下架前二次确认） -->
-            <el-switch 
-                v-model="row.status" 
-                :before-change="() => beforeStatusChange(row)"
-                @change="handleStatusChange(row)" 
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" link @click="openDialog('edit', row)">编辑</el-button>
-      <!-- 5. 删除确认（带提醒） -->
-            <el-popconfirm 
-                title="确定删除该商品吗?" 
-                confirm-button-type="danger"
-                width="220"
-                :icon="InfoFilled"
-                icon-color="#F56C6C"
-                cancel-button-text="取消"
-                confirm-button-text="确认删除"
-                @confirm="handleDelete(row)"
-            >
-              <template #reference>
-                <el-button type="danger" link>删除</el-button>
-              </template>
-              <div style="font-size: 12px; color: #909399; margin-top: 5px;">删除后无法恢复，仅保留历史订单</div>
-            </el-popconfirm>
-          </template>
-        </el-table-column>
-      </el-table>
-
-  <!-- 6. 分页 -->
-      <div class="pagination-container" v-if="tableData.length > 0">
-        <el-pagination 
-          background 
-          layout="total, prev, pager, next" 
-          :total="total" 
-          v-model:current-page="currentPage"
-          :page-size="pageSize"
-          @current-change="handlePageChange"
-        />
-      </div>
-    </el-card>
-
-  <!-- 新增/编辑弹窗 -->
-    <el-dialog v-model="dialogVisible" :title="dialogType === 'create' ? '新增商品' : '编辑商品'" width="600px" top="50px" @closed="resetForm">
-      <el-form :model="form" ref="formRef" :rules="rules" label-width="90px">
-        <el-form-item label="商品名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入商品名称" />
-        </el-form-item>
-        <el-form-item label="副标题" prop="subtitle">
-          <el-input v-model="form.subtitle" placeholder="请输入卖点/副标题" />
-        </el-form-item>
-        <el-row :gutter="20">
-            <el-col :span="12">
-                <el-form-item label="商品分类" prop="categoryId">
-                  <el-select v-model="form.categoryId" placeholder="请选择" style="width: 100%">
-                    <el-option 
-                        v-for="item in categoryOptions" 
-                        :key="item.id" 
-                        :label="item.name" 
-                        :value="item.id" 
-                    />
-                  </el-select>
-                </el-form-item>
-            </el-col>
-      <!-- 7. 适用宠物筛选 -->
-            <el-col :span="12">
-                 <el-form-item label="适用宠物" prop="petType">
-                     <el-select v-model="form.petType" placeholder="请选择" style="width: 100%">
-                        <el-option label="猫猫" value="cat" />
-                        <el-option label="狗狗" value="dog" />
-                        <el-option label="通用" value="general" />
-                     </el-select>
-                 </el-form-item>
-            </el-col>
-        </el-row>
-        
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="价格" prop="price">
-      <!-- 8. 价格校验规则 -->
-              <el-input-number v-model="form.price" :min="0.01" :precision="2" :step="1" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="单位" prop="unit">
-              <el-input v-model="form.unit" placeholder="如: 包, kg" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        
-        <el-row :gutter="20">
-          <el-col :span="12">
-             <el-form-item label="库存" prop="stock">
-               <el-input-number v-model="form.stock" :min="0" :precision="0" style="width: 100%" />
-             </el-form-item>
-          </el-col>
-          <el-col :span="12">
-             <el-form-item label="预警库存" prop="warningStock">
-               <el-input-number v-model="form.warningStock" :min="0" :precision="0" placeholder="默认10" style="width: 100%" />
-               <div class="tip-text">低于此值时，列表显示“库存紧张”标签</div>
-             </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="20">
-           <el-col :span="24">
-             <el-form-item label="排序权重" prop="sortWeight">
-               <el-input-number v-model="form.sortWeight" :min="0" :precision="0" placeholder="人工干预分" style="width: 100%" />
-               <div class="tip-text">用于控制列表默认排序，数值越大越靠前</div>
-             </el-form-item>
-          </el-col>
-        </el-row>
-
-      <!-- 统计信息（只读） -->
-        <el-row :gutter="20" v-if="dialogType === 'edit'">
-             <el-col :span="12">
-                 <el-form-item label="浏览量">
-                     <el-input :model-value="form.views" disabled />
-                 </el-form-item>
-             </el-col>
-             <el-col :span="12">
-                 <el-form-item label="笔记关联">
-                     <el-input :model-value="form.relatedNoteCount" disabled />
-                 </el-form-item>
-             </el-col>
-        </el-row>
-        
-      <!-- 主图 -->
-        <el-form-item label="商品主图（≤10张）" prop="cover">
-          <el-upload
-            v-model:file-list="coverFileList"
-            action="#"
-            list-type="picture-card"
-            :limit="10"
-            multiple
-            :http-request="customUploadCover"
-            :on-success="handleCoverUploadSuccess"
-            :on-preview="handlePreviewDetail"
-            :on-remove="handleCoverRemove"
-            :before-upload="beforeUpload"
-          >
-            <el-icon><Plus /></el-icon>
-          </el-upload>
-          <div class="tip-text" style="width: 100%">第一张会作为商品封面（列表展示用），上传后请点击“保存”才会生效</div>
-        </el-form-item>
-
-      <!-- 详情图 -->
-        <el-form-item label="详情长图" prop="detailImgs">
-          <el-upload
-            v-model:file-list="detailFileList"
-            action="#"
-            list-type="picture-card"
-            multiple
-            :http-request="customUploadDetail"
-            :on-success="handleDetailUploadSuccess"
-            :on-preview="handlePreviewDetail"
-            :on-remove="handleRemoveDetail"
-          >
-            <el-icon><Plus /></el-icon>
-          </el-upload>
-          <div class="tip-text" style="width: 100%">推荐上传多张详情图，支持拖拽排序</div>
-        </el-form-item>
-
-      <!-- 描述 -->
-        <el-form-item label="文字描述" prop="description">
-          <el-input v-model="form.description" type="textarea" :rows="4" placeholder="后期待接入富文本编辑器..." />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <div class="save-actions">
-               <el-button type="primary" @click="handleSubmit">保存</el-button>
-          </div>
-        </span>
-      </template>
-    </el-dialog>
-
-  <!-- 图片预览弹窗 -->
-    <el-dialog v-model="previewVisible">
-      <img w-full :src="previewImageUrl" alt="Preview Image" style="width: 100%" />
-    </el-dialog>
+    <ProductFilterBar />
+    <ProductTable />
+    <ProductDialogs />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, watch, provide } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, InfoFilled, ArrowDown, Picture } from '@element-plus/icons-vue'
 import * as productApi from '@/api/product'
 import request from '@/api/request'
 import { resolveImageUrl } from '@/utils/image'
+import { useAdminTable } from '@/composables/useAdminTable'
+import ProductFilterBar from './components/ProductFilterBar.vue'
+import ProductTable from './components/ProductTable.vue'
+import ProductDialogs from './components/ProductDialogs.vue'
 
-const loading = ref(false)
 const route = useRoute()
-const allData = ref([])
-const tableData = ref([])
+const {
+    loading,
+    allData,
+    tableData,
+    currentPage,
+    pageSize,
+    total,
+    runWithLoading,
+    resetPage,
+    setRows
+} = useAdminTable()
 const selectedRows = ref([]) // 批量选择的行
 
 // 筛选条件
@@ -363,18 +55,17 @@ const loadCategories = async () => {
     }
 }
 
-// 分页
-const currentPage = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
-
 const emptyText = ref("暂无商品，可点击右上角‘新增商品’进行添加")
 
 // 弹窗状态
 const dialogVisible = ref(false)
 const dialogType = ref('create') // create | edit
+const productDialogLoading = ref(false)
+const productDialogRenderKey = ref(0)
+let productDialogRequestSeq = 0
 const formRef = ref(null)
-const form = reactive({
+
+const getProductFormDefaults = () => ({
   id: null,
   name: '',
   subtitle: '',
@@ -394,6 +85,8 @@ const form = reactive({
   views: 0,
   relatedNoteCount: 0
 })
+
+const form = reactive(getProductFormDefaults())
 
 // 图片列表状态
 const coverFileList = ref([])
@@ -455,7 +148,7 @@ const parseDetailImgs = (value) => {
             try {
                 const parsed = JSON.parse(trimmed)
                 return Array.isArray(parsed) ? parsed : []
-            } catch (e) {
+            } catch {
                 return []
             }
         }
@@ -507,8 +200,7 @@ const buildPayloadFromRow = (row) => ({
 })
 
 const loadProductList = async () => {
-    loading.value = true
-    try {
+    await runWithLoading(async () => {
         const params = {
             pageNum: currentPage.value,
             pageSize: pageSize.value,
@@ -518,17 +210,14 @@ const loadProductList = async () => {
         }
         const res = await productApi.getProductList(params)
         if (res.code === 200 && res.data) {
-            allData.value = (res.data.records || []).map(mapProductFromApi)
+            setRows((res.data.records || []).map(mapProductFromApi), res.data.total)
             filterData()
-            total.value = res.data.total || 0
         } else {
             ElMessage.error(res.message || res.msg || '加载商品列表失败')
         }
-    } catch (e) {
+    }).catch((e) => {
         console.error('加载商品列表失败', e)
-    } finally {
-        loading.value = false
-    }
+    })
 }
 
 // 已经在商品页时，也要响应新的路由参数
@@ -618,7 +307,7 @@ const filterData = () => {
 }
 
 const handleFilter = () => {
-  currentPage.value = 1
+  resetPage()
   loadProductList()
 }
 
@@ -629,7 +318,7 @@ const resetFilter = () => {
     filterTag.value = ''
     searchKeyword.value = ''
     sortOption.value = 'default'
-    currentPage.value = 1
+    resetPage()
     loadProductList()
 }
 
@@ -686,12 +375,26 @@ const handleStatusChange = (row) => {
 // 增删改查
 
 const openDialog = async (type, row) => {
+  const requestSeq = ++productDialogRequestSeq
+  productDialogRenderKey.value += 1
   dialogType.value = type
+  Object.assign(form, getProductFormDefaults())
+  coverFileList.value = []
+  detailFileList.value = []
+  productDialogLoading.value = type === 'edit' && !!row
   dialogVisible.value = true
   
   if (type === 'edit' && row) {
+    const productId = row.id
     try {
-      const res = await productApi.getProductDetail(row.id)
+      const res = await productApi.getProductDetail(productId)
+      if (
+        requestSeq !== productDialogRequestSeq ||
+        !dialogVisible.value ||
+        dialogType.value !== 'edit'
+      ) {
+        return
+      }
       if (res.code === 200 && res.data) {
         const mapped = mapProductFromApi(res.data)
         Object.assign(form, mapped)
@@ -709,36 +412,23 @@ const openDialog = async (type, row) => {
         ElMessage.error(res.message || res.msg || '加载商品详情失败')
       }
     } catch (e) {
-      console.error('加载商品详情失败', e)
+      if (requestSeq === productDialogRequestSeq) {
+        console.error('加载商品详情失败', e)
+      }
+    } finally {
+      if (requestSeq === productDialogRequestSeq) {
+        productDialogLoading.value = false
+      }
     }
   } else {
-    // 重置表单。新增时给一组常用默认值，录入会快一点
-    Object.assign(form, {
-      id: null,
-      name: '',
-      subtitle: '',
-      categoryId: null,
-      petType: 'general',
-      price: 32,
-      unit: '2.5kg',
-      stock: 200,
-      warningStock: 10,
-      sortWeight: 0,
-      cover: '',
-      coverImgs: [],
-      detailImgs: [],
-      description: '',
-      status: true,
-      sales: 0,
-      views: 0,
-      relatedNoteCount: 0
-    })
-    coverFileList.value = []
-    detailFileList.value = []
+    // 新增时保留一组常用默认值，录入会快一点
+    productDialogLoading.value = false
   }
 }
 
 const resetForm = () => {
+  productDialogRequestSeq += 1
+  productDialogLoading.value = false
   if (formRef.value) formRef.value.resetFields()
 }
 
@@ -779,7 +469,7 @@ const handleCoverUploadSuccess = (response, uploadFile) => {
   }
 }
 
-const handleCoverRemove = (uploadFile, uploadFiles) => {
+const handleCoverRemove = (_uploadFile, _uploadFiles) => {
   // 这里不用额外处理，提交时会重新从 coverFileList 计算
   syncCoverToForm()
 }
@@ -805,7 +495,7 @@ const handleDetailUploadSuccess = (response, uploadFile) => {
   }
 }
 
-const handleRemoveDetail = (uploadFile, uploadFiles) => {}
+const handleRemoveDetail = (_uploadFile, _uploadFiles) => {}
 
 const handlePreviewDetail = (file) => {
   previewImageUrl.value = resolveImageUrl(file.rawUrl || file.url)
@@ -826,6 +516,8 @@ const beforeUpload = (file) => {
 }
 
 const handleSubmit = () => {
+  if (productDialogLoading.value) return
+
   formRef.value.validate(async (valid) => {
     if (valid) {
       // 只保留后端真实路径，避免 blob 地址被写进数据库
@@ -868,7 +560,7 @@ const handleSubmit = () => {
                     cancelButtonText: '取消',
                     type: 'warning'
                 })
-            } catch (e) {
+            } catch {
                 return // User cancelled
             }
         }
@@ -1003,9 +695,62 @@ const handleBatchCommand = (command) => {
       })
   }
 }
+provide('adminProductPageContext', {
+    searchKeyword,
+    filterCategory,
+    filterStatus,
+    filterStockStatus,
+    filterTag,
+    sortOption,
+    categoryOptions,
+    handleFilter,
+    resetFilter,
+    selectedRows,
+    handleBatchCommand,
+    ArrowDown,
+    openDialog,
+    tableData,
+    tableRowClassName,
+    loading,
+    emptyText,
+    handleSelectionChange,
+    resolveImageUrl,
+    Picture,
+    beforeStatusChange,
+    handleStatusChange,
+    InfoFilled,
+    handleDelete,
+    total,
+    currentPage,
+    pageSize,
+    handlePageChange,
+    dialogVisible,
+    dialogType,
+    productDialogLoading,
+    productDialogRenderKey,
+    resetForm,
+    form,
+    formRef,
+    rules,
+    coverFileList,
+    detailFileList,
+    customUploadCover,
+    handleCoverUploadSuccess,
+    handlePreviewDetail,
+    handleCoverRemove,
+    beforeUpload,
+    customUploadDetail,
+    handleDetailUploadSuccess,
+    handleRemoveDetail,
+    handleSubmit,
+    previewVisible,
+    previewImageUrl,
+    Plus
+})
+
 </script>
 
-<style scoped>
+<style>
 .filter-card {
   margin-bottom: 20px;
 }

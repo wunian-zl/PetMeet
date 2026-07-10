@@ -124,7 +124,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         Long activeAfterSale = afterSaleMapper.selectCount(new LambdaQueryWrapper<OmsAfterSale>()
                 .eq(OmsAfterSale::getOrderId, order.getId())
-                .in(OmsAfterSale::getStatus, OmsAfterSale.STATUS_PENDING, OmsAfterSale.STATUS_PROCESSING));
+                .in(OmsAfterSale::getStatus, OmsAfterSale.activeStatuses()));
         if (activeAfterSale != null && activeAfterSale > 0) {
             throw AppException.conflict("订单存在处理中售后,请先暂停发货");
         }
@@ -166,19 +166,21 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         boolean success = parseBoolean(refundInfo == null ? null : refundInfo.get("success"));
         String reason = trimToNull(refundInfo == null ? null : refundInfo.get("reason"));
         String remark = trimToNull(refundInfo == null ? null : refundInfo.get("remark"));
+        OmsAfterSale activeRefund = findActiveAfterSale(order.getId());
+        if (activeRefund != null) {
+            throw AppException.conflict("订单存在处理中售后,请前往售后工作台处理");
+        }
 
         if (success) {
-            OmsAfterSale activeRefund = findActiveAfterSale(order.getId());
             payService.refundOrder(order.getId(),
-                    activeRefund == null ? null : activeRefund.getId(),
+                    null,
                     StrUtil.blankToDefault(reason, remark));
 
             // 同意退款后用状态锁关闭订单，再回滚库存。
             boolean locked = orderMapper.update(null, new LambdaUpdateWrapper<OmsOrder>()
                     .eq(OmsOrder::getId, order.getId())
                     .eq(OmsOrder::getStatus, OmsOrder.STATUS_REFUNDING)
-                    .set(OmsOrder::getStatus, OmsOrder.STATUS_CLOSED)
-                    .set(OmsOrder::getRefundAmount, order.getTotalAmount())) > 0;
+                    .set(OmsOrder::getStatus, OmsOrder.STATUS_CLOSED)) > 0;
             if (!locked) {
                 throw AppException.conflict("订单状态已变化,请刷新后重试");
             }
@@ -187,7 +189,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             String handleRemark = StrUtil.blankToDefault(remark, "管理员已同意退款");
             afterSaleMapper.update(null, new LambdaUpdateWrapper<OmsAfterSale>()
                     .eq(OmsAfterSale::getOrderId, order.getId())
-                    .in(OmsAfterSale::getStatus, OmsAfterSale.STATUS_PENDING, OmsAfterSale.STATUS_PROCESSING)
+                    .in(OmsAfterSale::getStatus, OmsAfterSale.activeStatuses())
                     .set(OmsAfterSale::getStatus, OmsAfterSale.STATUS_COMPLETED)
                     .set(OmsAfterSale::getHandleRemark, handleRemark)
                     .set(OmsAfterSale::getHandleTime, LocalDateTime.now()));
@@ -215,7 +217,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         String rejectRemark = StrUtil.blankToDefault(remark, "管理员已拒绝退款");
         afterSaleMapper.update(null, new LambdaUpdateWrapper<OmsAfterSale>()
                 .eq(OmsAfterSale::getOrderId, order.getId())
-                .in(OmsAfterSale::getStatus, OmsAfterSale.STATUS_PENDING, OmsAfterSale.STATUS_PROCESSING)
+                .in(OmsAfterSale::getStatus, OmsAfterSale.activeStatuses())
                 .set(OmsAfterSale::getStatus, OmsAfterSale.STATUS_REJECTED)
                 .set(OmsAfterSale::getHandleRemark, rejectRemark)
                 .set(OmsAfterSale::getHandleTime, LocalDateTime.now()));
@@ -418,6 +420,11 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                 refundVO.setReason(refundReq.getReason());
                 refundVO.setDescription(refundReq.getDescription());
                 refundVO.setEvidenceImages(parseEvidence(refundReq.getEvidenceImages()));
+                refundVO.setAfterSaleRefundAmount(refundReq.getRefundAmount());
+                refundVO.setReturnCompany(refundReq.getReturnCompany());
+                refundVO.setReturnTrackingNo(refundReq.getReturnTrackingNo());
+                refundVO.setExchangeCompany(refundReq.getExchangeCompany());
+                refundVO.setExchangeTrackingNo(refundReq.getExchangeTrackingNo());
                 refundVO.setStatus(refundReq.getStatus());
                 refundVO.setStatusDesc(getAfterSaleStatusDesc(refundReq.getStatus()));
             }
@@ -468,7 +475,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private OmsAfterSale findActiveAfterSale(Long orderId) {
         return afterSaleMapper.selectOne(new LambdaQueryWrapper<OmsAfterSale>()
                 .eq(OmsAfterSale::getOrderId, orderId)
-                .in(OmsAfterSale::getStatus, OmsAfterSale.STATUS_PENDING, OmsAfterSale.STATUS_PROCESSING)
+                .in(OmsAfterSale::getStatus, OmsAfterSale.activeStatuses())
                 .orderByDesc(OmsAfterSale::getCreateTime)
                 .last("limit 1"));
     }
@@ -561,6 +568,10 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             case OmsAfterSale.STATUS_COMPLETED -> "已完成";
             case OmsAfterSale.STATUS_REJECTED -> "已拒绝";
             case OmsAfterSale.STATUS_CANCELED -> "已取消";
+            case OmsAfterSale.STATUS_WAIT_BUYER_RETURN -> "待买家退货";
+            case OmsAfterSale.STATUS_WAIT_MERCHANT_RECEIVE -> "待商家收货";
+            case OmsAfterSale.STATUS_REFUNDING -> "退款中";
+            case OmsAfterSale.STATUS_EXCHANGE_SHIPPED -> "换货已发货";
             default -> "处理中";
         };
     }

@@ -86,7 +86,7 @@ const handleShow = async () => {
       user.value = null
       loadedUserId.value = id
     }
-  } catch (e) {
+  } catch {
     user.value = null
     loadedUserId.value = id
   } finally {
@@ -135,4 +135,3 @@ watch(
   color: #909399;
 }
 </style>
-

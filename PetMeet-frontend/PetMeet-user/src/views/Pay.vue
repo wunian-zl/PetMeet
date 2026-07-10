@@ -35,8 +35,8 @@
               <strong>{{ currentMethodLabel }}</strong>
             </div>
           </div>
-          <el-dropdown trigger="click" @command="handlePayTypeCommand">
-            <el-button class="switch-button" text type="primary">切换</el-button>
+          <el-dropdown trigger="click" :disabled="refreshingPay" @command="handlePayTypeCommand">
+            <el-button class="switch-button" text type="primary" :disabled="refreshingPay">切换</el-button>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="ALIPAY" :disabled="payType === 'ALIPAY'">支付宝</el-dropdown-item>
@@ -62,6 +62,7 @@
               type="success"
               size="large"
               :loading="mockPaying"
+              :disabled="mockPaying || refreshingPay"
               @click="confirmMockPay"
             >
               模拟支付成功
@@ -72,6 +73,8 @@
               plain
               size="large"
               class="pay-action"
+              :loading="refreshingPay"
+              :disabled="refreshingPay"
               @click="refreshPay(true)"
             >
               重新生成二维码
@@ -107,7 +110,7 @@
         </div>
         <div class="side-actions">
           <el-button class="side-button" @click="goOrders">返回订单</el-button>
-          <el-button class="side-button danger-button" :loading="cancelling" @click="cancelOrder">取消订单</el-button>
+          <el-button class="side-button danger-button" :loading="cancelling" :disabled="cancelling" @click="cancelOrder">取消订单</el-button>
         </div>
       </aside>
     </section>
@@ -136,6 +139,7 @@ const qrDataUrl = ref('')
 const loading = ref(false)
 const cancelling = ref(false)
 const mockPaying = ref(false)
+const refreshingPay = ref(false)
 const remainingSeconds = ref(0)
 const countdownTimer = ref(null)
 const pollTimer = ref(null)
@@ -198,18 +202,23 @@ async function fetchOrder() {
 }
 
 async function refreshPay(forceRefresh = false) {
-  if (!order.value) return
-  clearTimers()
-  qrDataUrl.value = ''
-  payInfo.value = await createPay({
-    orderId: Number(orderId.value),
-    payType: payType.value,
-    payMode: 'QR_CODE',
-    forceRefresh
-  })
-  await renderQr(payInfo.value.qrCodeUrl)
-  startCountdown()
-  startPolling()
+  if (!order.value || refreshingPay.value) return
+  refreshingPay.value = true
+  try {
+    clearTimers()
+    qrDataUrl.value = ''
+    payInfo.value = await createPay({
+      orderId: Number(orderId.value),
+      payType: payType.value,
+      payMode: 'QR_CODE',
+      forceRefresh
+    })
+    await renderQr(payInfo.value.qrCodeUrl)
+    startCountdown()
+    startPolling()
+  } finally {
+    refreshingPay.value = false
+  }
 }
 
 async function renderQr(content) {
@@ -284,13 +293,13 @@ async function switchPayType() {
 
 async function handlePayTypeCommand(nextType) {
   const normalized = normalizePayType(nextType)
-  if (normalized === payType.value) return
+  if (normalized === payType.value || refreshingPay.value) return
   payType.value = normalized
   await switchPayType()
 }
 
 async function confirmMockPay() {
-  if (!payInfo.value?.paySn) return
+  if (!payInfo.value?.paySn || mockPaying.value || refreshingPay.value) return
   mockPaying.value = true
   try {
     await mockConfirmPay(payInfo.value.paySn)
@@ -301,7 +310,7 @@ async function confirmMockPay() {
 }
 
 async function cancelOrder() {
-  if (!orderId.value) return
+  if (!orderId.value || cancelling.value) return
   cancelling.value = true
   try {
     await request.post(`/order/cancel/${orderId.value}`)

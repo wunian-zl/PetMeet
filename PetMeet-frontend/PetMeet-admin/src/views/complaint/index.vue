@@ -1,542 +1,35 @@
 <template>
   <div class="complaint-container">
-    <el-card shadow="never" class="filter-card">
-      <div class="filter-bar">
-        <el-input
-          v-model="keyword"
-          placeholder="笔记标题 / 投诉人 / 作者"
-          clearable
-          style="width: 220px"
-          @input="handleFilter"
-        />
-        <el-select v-model="statusFilter" placeholder="处理状态" style="width: 160px" clearable @change="handleFilter">
-          <el-option label="待处理" :value="0" />
-          <el-option label="已处理" :value="1" />
-          <el-option label="已驳回" :value="2" />
-        </el-select>
-        <div class="filter-actions">
-          <span v-if="selectedRows.length > 0" class="selected-hint">已选 {{ selectedRows.length }} 项</span>
-          <el-button
-            type="danger"
-            plain
-            :disabled="deletableSelectedIds.length === 0"
-            @click="handleBatchDelete"
-          >
-            批量删除
-          </el-button>
-        </div>
-      </div>
-    </el-card>
-
-    <el-card shadow="never" class="table-card">
-      <el-alert
-        class="table-tip"
-        type="info"
-        :closable="false"
-        show-icon
-        title="点击“投诉详情”可查看完整投诉内容；点击笔记标题可查看笔记内容"
-      />
-      <el-table :data="tableData" style="width: 100%" row-key="id" v-loading="loading" @selection-change="handleSelectionChange">
-      <!-- 不常用字段放进可展开区域，避免表格横向滚动 -->
-        <el-table-column type="selection" width="42" />
-        <el-table-column type="expand" width="44">
-          <template #default="{ row }">
-            <div class="expand-panel">
-              <el-descriptions border size="small" :column="2">
-                <el-descriptions-item label="作者">
-                  <UserInfoPopover v-if="row.noteAuthorId" :user-id="row.noteAuthorId" placement="right" :width="340">
-                    <template #reference>
-                      <span class="user-link">{{ row.noteAuthorName || '-' }}</span>
-                    </template>
-                  </UserInfoPopover>
-                  <span v-else>-</span>
-                </el-descriptions-item>
-                <el-descriptions-item label="处理时间">{{ row.handleTime || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="原因">{{ row.reason || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="处理说明">
-                  <span class="expand-pre">{{ row.handleRemark || '-' }}</span>
-                </el-descriptions-item>
-                <el-descriptions-item label="详情">
-                  <span class="expand-pre">{{ row.content || '-' }}</span>
-                </el-descriptions-item>
-                <el-descriptions-item v-if="evidenceImagesOf(row).length" label="凭证图片" :span="2">
-                  <div class="evidence-grid evidence-grid--compact">
-                    <el-image
-                      v-for="(img, idx) in resolvedEvidenceImages(row)"
-                      :key="`${row.id}-expand-evidence-${idx}`"
-                      class="evidence-image"
-                      :src="img"
-                      :preview-src-list="resolvedEvidenceImages(row)"
-                      :initial-index="idx"
-                      fit="cover"
-                      preview-teleported
-                    />
-                  </div>
-                </el-descriptions-item>
-                <el-descriptions-item label="用户反馈">
-                  <span v-if="row.feedbackStatus === 1" class="feedback-ok">满意</span>
-                  <span v-else-if="row.feedbackStatus === 2" class="feedback-bad">不满意</span>
-                  <span v-else>-</span>
-                </el-descriptions-item>
-                <el-descriptions-item v-if="row.feedbackContent" label="反馈内容">
-                  <span class="expand-pre">{{ row.feedbackContent }}</span>
-                </el-descriptions-item>
-              </el-descriptions>
-            </div>
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column label="笔记" min-width="200" show-overflow-tooltip>
-          <template #default="{ row }">
-            <div class="note-cell">
-              <el-tag size="small" type="info" effect="plain">#{{ row.noteId }}</el-tag>
-              <el-tag v-if="isCommentComplaint(row)" size="small" type="danger" effect="plain">评论举报</el-tag>
-              <el-link
-                v-if="row.noteId"
-                type="primary"
-                :underline="false"
-                class="note-link"
-                @click.stop="openNoteDialog(row.noteId, isCommentComplaint(row) ? row : null)"
-              >
-                <span class="note-title-ellipsis">{{ row.noteTitle || '-' }}</span>
-              </el-link>
-              <span v-else class="note-title-ellipsis">{{ row.noteTitle || '-' }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="投诉人" min-width="170">
-          <template #default="{ row }">
-            <UserInfoPopover v-if="row.reporterId" :user-id="row.reporterId" placement="right" :width="340">
-              <template #reference>
-                <div class="user-cell">
-                  <el-avatar :size="24" :src="resolveImageUrl(row.reporterAvatar)" />
-                  <span class="user-name">{{ row.reporterName || '-' }}</span>
-                </div>
-              </template>
-            </UserInfoPopover>
-            <div v-else class="user-cell">
-              <el-avatar :size="24" :src="resolveImageUrl(row.reporterAvatar)" />
-              <span class="user-name">{{ row.reporterName || '-' }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="投诉内容" min-width="260" show-overflow-tooltip>
-          <template #default="{ row }">
-            <div class="complaint-preview" @click.stop="openComplaintDialog(row)">
-              <div class="complaint-preview-row1">
-                <el-tag size="small" type="warning" effect="plain">{{ row.reason || '未填写原因' }}</el-tag>
-                <el-link type="primary" :underline="false" @click.stop.prevent="openComplaintDialog(row)">详情</el-link>
-              </div>
-              <div v-if="isCommentComplaint(row)" class="complaint-target">
-                被举报评论：{{ oneLineText(row.commentContent) || '评论已删除或不存在' }}
-              </div>
-              <div class="complaint-preview-row2">{{ oneLineText(row.content) || '（无补充说明）' }}</div>
-              <div v-if="evidenceImagesOf(row).length" class="complaint-preview-evidence">
-                图片凭证{{ evidenceImagesOf(row).length }}张
-              </div>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="110">
-          <template #default="{ row }">
-            <el-tag :type="statusType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="createTime" label="提交时间" width="170" />
-        <el-table-column label="操作" width="260">
-          <template #default="{ row }">
-            <el-button link size="small" @click.stop="openComplaintDialog(row)">投诉详情</el-button>
-            <template v-if="row.status === 0">
-              <el-button type="success" link size="small" @click.stop="updateStatus(row, 1)">处理</el-button>
-              <el-button type="danger" link size="small" @click.stop="updateStatus(row, 2)">驳回</el-button>
-            </template>
-            <el-button
-              v-if="canDeleteComplaint(row)"
-              type="danger"
-              link
-              size="small"
-              @click.stop="handleDelete(row)"
-            >
-              删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <div class="pagination-bar">
-        <el-pagination
-          background
-          layout="total, prev, pager, next"
-          :total="total"
-          :page-size="pageSize"
-          v-model:current-page="currentPage"
-          @current-change="handlePageChange"
-        />
-      </div>
-    </el-card>
-
-    <el-dialog
-      v-model="noteDialogVisible"
-      title="笔记内容"
-      width="780px"
-      top="6vh"
-      class="note-detail-dialog"
-      @closed="resetNoteDialog"
-    >
-      <div v-loading="noteDetailLoading">
-        <div v-if="noteDetail" class="note-detail">
-          <div class="note-detail-header">
-            <div class="note-author">
-              <el-avatar :size="36" :src="resolveImageUrl(noteDetail.userAvatar)" />
-              <div class="note-author-info">
-                <div class="note-author-name">{{ noteDetail.username || '-' }}</div>
-                <div class="note-time">{{ formatDateTime(noteDetail.createTime) }}</div>
-              </div>
-            </div>
-            <el-tag size="small" type="info" effect="plain">#{{ noteDetail.id }}</el-tag>
-          </div>
-
-          <h3 class="note-title-full">{{ noteDetail.title || '-' }}</h3>
-          <div v-if="noteDetail.category || noteTags.length" class="note-meta">
-            <el-tag v-if="noteDetail.category" size="small" type="info">{{ noteDetail.category }}</el-tag>
-            <el-tag v-for="tag in noteTags" :key="tag" size="small" effect="plain">#{{ tag }}</el-tag>
-          </div>
-
-          <div class="note-media">
-            <video
-              v-if="noteDetail.type === 'video' && noteDetail.videoUrl"
-              class="note-video"
-              :src="resolveImageUrl(noteDetail.videoUrl)"
-              :poster="resolveImageUrl(noteDetail.cover)"
-              controls
-              playsinline
-            />
-            <el-image
-              v-else-if="noteDetail.cover"
-              class="note-image"
-              :src="resolveImageUrl(noteDetail.cover)"
-              fit="contain"
-            />
-            <el-empty v-else description="暂无图片" :image-size="70" />
-          </div>
-
-          <div class="note-text">{{ noteDetail.content || '-' }}</div>
-
-          <section class="note-comments-panel">
-            <div class="note-comments-header">
-              <div class="note-comments-title">
-                <span>评论</span>
-                <em>{{ noteCommentTotal }}条</em>
-              </div>
-              <el-tag v-if="noteHighlightCommentId" size="small" type="danger" effect="plain">
-                已定位举报评论
-              </el-tag>
-            </div>
-
-            <div v-loading="noteCommentsLoading" class="note-comments-body">
-              <el-empty
-                v-if="!noteCommentsLoading && !noteComments.length"
-                description="暂无评论"
-                :image-size="70"
-              />
-              <div v-else class="note-comment-list">
-                <div v-for="comment in noteComments" :key="comment.id" class="note-comment-thread">
-                  <div
-                    class="note-comment-row"
-                    :class="{
-                      'is-highlight-target': isTargetComment(comment),
-                      'is-highlight-active': isTargetComment(comment) && noteHighlightActive
-                    }"
-                    :data-comment-id="comment.id"
-                  >
-                    <el-avatar
-                      v-if="!comment.deleted"
-                      :size="30"
-                      :src="resolveImageUrl(comment.userAvatar)"
-                      class="note-comment-avatar"
-                    />
-                    <div class="note-comment-body">
-                      <div v-if="comment.deleted" class="note-comment-deleted">评论已删除</div>
-                      <template v-else>
-                        <div class="note-comment-meta">
-                          <strong>{{ commentDisplayName(comment) }}</strong>
-                          <el-tag v-if="comment.author" size="small" effect="plain">作者</el-tag>
-                          <span>{{ formatDateTime(comment.createTime) }}</span>
-                        </div>
-                        <div class="note-comment-content">{{ comment.content || '-' }}</div>
-                      </template>
-                    </div>
-                  </div>
-
-                  <div v-if="comment.replies && comment.replies.length" class="note-reply-list">
-                    <div
-                      v-for="reply in comment.replies"
-                      :key="reply.id"
-                      class="note-comment-row note-comment-row--reply"
-                      :class="{
-                        'is-highlight-target': isTargetComment(reply),
-                        'is-highlight-active': isTargetComment(reply) && noteHighlightActive
-                      }"
-                      :data-comment-id="reply.id"
-                    >
-                      <el-avatar
-                        :size="24"
-                        :src="resolveImageUrl(reply.userAvatar)"
-                        class="note-comment-avatar"
-                      />
-                      <div class="note-comment-body">
-                        <div class="note-comment-meta">
-                          <strong>{{ commentDisplayName(reply) }}</strong>
-                          <el-tag v-if="reply.author" size="small" effect="plain">作者</el-tag>
-                          <span v-if="reply.replyToNickname" class="note-reply-target">
-                            回复@{{ reply.replyToNickname }}
-                          </span>
-                          <span>{{ formatDateTime(reply.createTime) }}</span>
-                        </div>
-                        <div class="note-comment-content">{{ reply.content || '-' }}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div v-if="comment.replyCount > (comment.replies?.length || 0)" class="note-reply-more">
-                    还有{{ comment.replyCount - (comment.replies?.length || 0) }}条回复未展开
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="noteCommentHasMore" class="note-comment-load-more">
-                <el-button size="small" :loading="noteCommentsLoading" @click="loadMoreNoteComments">
-                  加载更多评论
-                </el-button>
-              </div>
-              <div v-if="noteCommentError" class="note-comment-error">{{ noteCommentError }}</div>
-            </div>
-          </section>
-        </div>
-
-        <el-empty v-else :description="noteDetailError || '暂无数据'" :image-size="90" />
-      </div>
-    </el-dialog>
-
-    <el-dialog
-      v-model="complaintDialogVisible"
-      title="投诉详情"
-      width="1080px"
-      top="3vh"
-      class="complaint-detail-dialog"
-      @closed="resetComplaintDialog"
-    >
-      <div v-if="currentComplaint" class="complaint-detail">
-        <div class="complaint-detail-hero">
-          <div class="complaint-hero-main">
-            <div class="complaint-hero-meta">
-              <el-tag :type="isCommentComplaint(currentComplaint) ? 'danger' : 'info'" effect="plain">
-                {{ complaintTargetText(currentComplaint) }}
-              </el-tag>
-              <span>#{{ currentComplaint.id }}</span>
-            </div>
-            <h2>{{ currentComplaint.reason || '未填写原因' }}</h2>
-            <div class="complaint-hero-sub">
-              <span>关联笔记</span>
-              <el-link
-                v-if="currentComplaint.noteId"
-                type="primary"
-                :underline="false"
-                @click="openNoteDialog(currentComplaint.noteId, isCommentComplaint(currentComplaint) ? currentComplaint : null)"
-              >
-                {{ currentComplaint.noteTitle || `#${currentComplaint.noteId}` }}
-              </el-link>
-              <span v-else>-</span>
-            </div>
-          </div>
-          <div class="complaint-hero-side">
-            <div class="complaint-hero-status">
-              <el-tag :type="statusType(currentComplaint.status)" effect="light" size="large">
-                {{ statusText(currentComplaint.status) }}
-              </el-tag>
-              <span>提交于{{ currentComplaint.createTime || '-' }}</span>
-            </div>
-            <el-button
-              v-if="currentComplaint?.noteId"
-              type="primary"
-              class="complaint-hero-action"
-              @click="openNoteDialog(currentComplaint.noteId, isCommentComplaint(currentComplaint) ? currentComplaint : null)"
-            >
-              {{ isCommentComplaint(currentComplaint) ? '查看笔记的评论' : '查看笔记内容' }}
-            </el-button>
-          </div>
-        </div>
-
-        <div class="complaint-detail-layout">
-          <main class="complaint-detail-main">
-            <section class="complaint-section">
-              <div class="section-heading">
-                <h3>投诉说明</h3>
-                <span>{{ currentComplaint.content ? '用户补充内容' : '用户未填写补充说明' }}</span>
-              </div>
-              <div class="complaint-text-block">
-                {{ currentComplaint.content || '（无补充说明）' }}
-              </div>
-            </section>
-
-            <section v-if="isCommentComplaint(currentComplaint)" class="complaint-section">
-              <div class="section-heading">
-                <h3>被举报评论</h3>
-                <span>{{ commentKindText(currentComplaint) }}</span>
-              </div>
-              <div class="reported-comment-card">
-                <div class="reported-comment-meta">
-                  <span>#{{ currentComplaint.commentId || '-' }}</span>
-                  <el-tag :type="currentComplaint.commentDeleted ? 'info' : 'success'" size="small" effect="plain">
-                    {{ currentComplaint.commentDeleted ? '已删除' : '正常' }}
-                  </el-tag>
-                  <span>{{ currentComplaint.commentCreateTime || '-' }}</span>
-                </div>
-                <div class="reported-comment-author">
-                  <span>评论作者</span>
-                  <strong>{{ currentComplaint.commentAuthorName || '-' }}</strong>
-                </div>
-                <div class="reported-comment-block">
-                  {{ currentComplaint.commentContent || '评论已删除或不存在' }}
-                </div>
-                <div
-                  v-if="currentComplaint.replyToContent || currentComplaint.parentCommentContent"
-                  class="reported-comment-context"
-                >
-                  <div v-if="currentComplaint.replyToContent">
-                    <span>回复对象</span>
-                    <p>
-                      <strong>{{ currentComplaint.replyToAuthorName || '用户' }}：</strong>
-                      {{ currentComplaint.replyToContent }}
-                    </p>
-                  </div>
-                  <div v-if="currentComplaint.parentCommentContent">
-                    <span>所属一级评论</span>
-                    <p>
-                      <strong>{{ currentComplaint.parentCommentAuthorName || '用户' }}：</strong>
-                      {{ currentComplaint.parentCommentContent }}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section class="complaint-section">
-              <div class="section-heading">
-                <h3>图片凭证</h3>
-                <span>{{ evidenceImagesOf(currentComplaint).length ? `${evidenceImagesOf(currentComplaint).length}张` : '无图片凭证' }}</span>
-              </div>
-              <div v-if="evidenceImagesOf(currentComplaint).length" class="evidence-grid evidence-grid--large">
-                <el-image
-                  v-for="(img, idx) in resolvedEvidenceImages(currentComplaint)"
-                  :key="`complaint-evidence-${idx}`"
-                  class="evidence-image evidence-image--large"
-                  :src="img"
-                  :preview-src-list="resolvedEvidenceImages(currentComplaint)"
-                  :initial-index="idx"
-                  fit="cover"
-                  preview-teleported
-                />
-              </div>
-              <div v-else class="compact-empty">暂无图片凭证</div>
-            </section>
-
-            <section class="complaint-section">
-              <div class="section-heading">
-                <h3>处理结果</h3>
-                <span>{{ currentComplaint.handleTime || '尚未处理' }}</span>
-              </div>
-              <div class="complaint-text-block">
-                {{ currentComplaint.handleRemark || '（暂无处理说明）' }}
-              </div>
-            </section>
-          </main>
-
-          <aside class="complaint-detail-side">
-            <section class="side-panel">
-              <h3>相关人员</h3>
-              <div class="side-person">
-                <span class="side-label">投诉人</span>
-                <div class="side-person-main">
-                  <el-avatar :size="32" :src="resolveImageUrl(currentComplaint.reporterAvatar)" />
-                  <strong>{{ currentComplaint.reporterName || '-' }}</strong>
-                </div>
-              </div>
-              <div class="side-row">
-                <span>笔记作者</span>
-                <strong>{{ currentComplaint.noteAuthorName || '-' }}</strong>
-              </div>
-              <div class="side-row" v-if="isCommentComplaint(currentComplaint)">
-                <span>评论作者</span>
-                <strong>{{ currentComplaint.commentAuthorName || '-' }}</strong>
-              </div>
-            </section>
-
-            <section class="side-panel">
-              <h3>时间线</h3>
-              <div class="timeline-row">
-                <span class="timeline-dot"></span>
-                <div>
-                  <strong>提交投诉</strong>
-                  <span>{{ currentComplaint.createTime || '-' }}</span>
-                </div>
-              </div>
-              <div class="timeline-row" :class="{ muted: !currentComplaint.handleTime }">
-                <span class="timeline-dot"></span>
-                <div>
-                  <strong>处理完成</strong>
-                  <span>{{ currentComplaint.handleTime || '待处理' }}</span>
-                </div>
-              </div>
-              <div class="timeline-row" :class="{ muted: !currentComplaint.feedbackTime }">
-                <span class="timeline-dot"></span>
-                <div>
-                  <strong>用户反馈</strong>
-                  <span>{{ currentComplaint.feedbackTime || '暂无反馈' }}</span>
-                </div>
-              </div>
-            </section>
-
-            <section class="side-panel">
-              <h3>反馈状态</h3>
-              <div class="feedback-status">
-                <span v-if="currentComplaint.feedbackStatus === 1" class="feedback-ok">满意</span>
-                <span v-else-if="currentComplaint.feedbackStatus === 2" class="feedback-bad">不满意</span>
-                <span v-else>暂无反馈</span>
-              </div>
-              <p v-if="currentComplaint.feedbackContent" class="feedback-content">
-                {{ currentComplaint.feedbackContent }}
-              </p>
-            </section>
-          </aside>
-        </div>
-      </div>
-      <el-empty v-else description="暂无数据" :image-size="90" />
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="complaintDialogVisible = false">关闭</el-button>
-        </div>
-      </template>
-    </el-dialog>
+    <ComplaintToolbar />
+    <ComplaintTable />
+    <ComplaintDialogs />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed, nextTick, provide } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getComplaintList, updateComplaintStatus, deleteComplaint, batchDeleteComplaints } from '@/api/complaint'
 import { getNoteDetail, getCommentList, getCommentReplies } from '@/api/content'
 import { resolveImageUrl } from '@/utils/image'
+import { useAdminTable } from '@/composables/useAdminTable'
 import UserInfoPopover from '@/components/UserInfoPopover.vue'
+import ComplaintToolbar from './components/ComplaintToolbar.vue'
+import ComplaintTable from './components/ComplaintTable.vue'
+import ComplaintDialogs from './components/ComplaintDialogs.vue'
 
 const keyword = ref('')
 const statusFilter = ref('')
-const loading = ref(false)
-const tableData = ref([])
-const currentPage = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
+const {
+  loading,
+  tableData,
+  currentPage,
+  pageSize,
+  total,
+  runWithLoading,
+  resetPage,
+  setRows
+} = useAdminTable()
 const selectedRows = ref([])
 
 const noteDialogVisible = ref(false)
@@ -820,8 +313,7 @@ const resetComplaintDialog = () => {
 }
 
 const loadList = async () => {
-  loading.value = true
-  try {
+  await runWithLoading(async () => {
     const res = await getComplaintList({
       pageNum: currentPage.value,
       pageSize: pageSize.value,
@@ -830,26 +322,24 @@ const loadList = async () => {
     })
     if (res.code === 200 && res.data) {
       const records = res.data.records || []
-      tableData.value = records.map((item) => ({
+      setRows(records.map((item) => ({
         ...item,
         createTime: formatDateTime(item.createTime),
         handleTime: formatDateTime(item.handleTime),
         feedbackTime: formatDateTime(item.feedbackTime)
-      }))
-      total.value = res.data.total || 0
+      })), res.data.total)
     } else {
       ElMessage.error(res.message || res.msg || 'Load failed')
     }
-  } catch (e) {
-    console.error('加载投诉列表失败', e)
-  } finally {
+  }, () => {
     selectedRows.value = []
-    loading.value = false
-  }
+  }).catch((e) => {
+    console.error('加载投诉列表失败', e)
+  })
 }
 
 const handleFilter = () => {
-  currentPage.value = 1
+  resetPage()
   loadList()
 }
 
@@ -883,7 +373,7 @@ const handleDelete = async (row) => {
     }
     ElMessage.success('删除成功')
     loadList()
-  } catch (e) {}
+  } catch {}
 }
 
 const handleBatchDelete = async () => {
@@ -912,7 +402,7 @@ const handleBatchDelete = async () => {
     }
     ElMessage.success('批量删除成功')
     loadList()
-  } catch (e) {}
+  } catch {}
 }
 
 const updateStatus = async (row, status) => {
@@ -935,14 +425,67 @@ const updateStatus = async (row, status) => {
     }
     ElMessage.success('操作成功')
     loadList()
-  } catch (e) {
+    return true
+  } catch {
     // 用户取消了操作
+    return false
   }
 }
 
 onMounted(() => {
   loadList()
 })
+provide('adminComplaintPageContext', {
+    keyword,
+    statusFilter,
+    loading,
+    tableData,
+    currentPage,
+    pageSize,
+    total,
+    selectedRows,
+    noteDialogVisible,
+    noteDetailLoading,
+    noteDetail,
+    noteDetailError,
+    noteComments,
+    noteCommentsLoading,
+    noteCommentTotal,
+    noteCommentError,
+    noteHighlightCommentId,
+    noteHighlightActive,
+    complaintDialogVisible,
+    currentComplaint,
+    formatDateTime,
+    statusText,
+    statusType,
+    noteTags,
+    isCommentComplaint,
+    complaintTargetText,
+    commentKindText,
+    evidenceImagesOf,
+    resolvedEvidenceImages,
+    canDeleteComplaint,
+    noteCommentHasMore,
+    deletableSelectedIds,
+    commentDisplayName,
+    isTargetComment,
+    loadMoreNoteComments,
+    resetNoteDialog,
+    openNoteDialog,
+    oneLineText,
+    openComplaintDialog,
+    resetComplaintDialog,
+    handleFilter,
+    handlePageChange,
+    handleSelectionChange,
+    handleDelete,
+    handleBatchDelete,
+    updateStatus,
+    UserInfoPopover,
+    resolveImageUrl
+})
+
 </script>
 
 <style scoped>

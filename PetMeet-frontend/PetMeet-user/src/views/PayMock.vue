@@ -7,8 +7,8 @@
 
       <div class="actions">
         <el-button @click="goBack">返回</el-button>
-        <el-button type="primary" :loading="paying" @click="handlePay">支付成功</el-button>
-        <el-button type="danger" plain :loading="cancelling" @click="handleCancel">取消订单</el-button>
+        <el-button type="primary" :loading="paying" :disabled="paying" @click="handlePay">支付成功</el-button>
+        <el-button type="danger" plain :loading="cancelling" :disabled="cancelling" @click="handleCancel">取消订单</el-button>
       </div>
     </div>
 
@@ -57,6 +57,7 @@ const fetchOrder = async () => {
 }
 
 const handlePay = async () => {
+  if (paying.value) return
   if (!orderId.value) {
     ElMessage.warning('缺少订单号')
     return
@@ -73,6 +74,7 @@ const handlePay = async () => {
 }
 
 const handleCancel = async () => {
+  if (cancelling.value) return
   if (!orderId.value) {
     ElMessage.warning('缺少订单号')
     return

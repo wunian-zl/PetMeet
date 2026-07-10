@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.petmeet.common.AppException;
 import org.petmeet.dto.PayCreateDTO;
+import org.petmeet.entity.OmsAfterSale;
 import org.petmeet.entity.OmsOrder;
 import org.petmeet.entity.OmsOrderItem;
 import org.petmeet.entity.OmsPayLog;
@@ -19,6 +20,7 @@ import org.petmeet.enums.PayModeEnum;
 import org.petmeet.enums.PayStatusEnum;
 import org.petmeet.enums.PayTypeEnum;
 import org.petmeet.enums.RefundStatusEnum;
+import org.petmeet.mapper.OmsAfterSaleMapper;
 import org.petmeet.mapper.OmsOrderItemMapper;
 import org.petmeet.mapper.OmsOrderMapper;
 import org.petmeet.mapper.OmsPayLogMapper;
@@ -53,6 +55,7 @@ public class PayServiceImpl implements PayService {
     private static final DateTimeFormatter SN_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
     private final OmsOrderMapper orderMapper;
+    private final OmsAfterSaleMapper afterSaleMapper;
     private final OmsOrderItemMapper orderItemMapper;
     private final OmsPayLogMapper payLogMapper;
     private final OmsRefundLogMapper refundLogMapper;
@@ -193,7 +196,16 @@ public class PayServiceImpl implements PayService {
             log.warn("支付宝回调找不到支付流水:{}", callback.getPaySn());
             return "fail";
         }
+        if (!isCallbackAmountValid(payLog, callback)) {
+            if (payLog.getPayStatus() != null && payLog.getPayStatus() == PayStatusEnum.PENDING.getCode()) {
+                failPayLog(payLog.getId(), "Alipay callback amount mismatch");
+            }
+            return "fail";
+        }
         if (payLog.getPayStatus() != null && payLog.getPayStatus() == PayStatusEnum.SUCCESS.getCode()) {
+            if (!isCallbackTradeNoValid(payLog, callback)) {
+                return "fail";
+            }
             return "success";
         }
         if (payLog.getPayStatus() == null || payLog.getPayStatus() != PayStatusEnum.PENDING.getCode()) {
@@ -216,9 +228,33 @@ public class PayServiceImpl implements PayService {
         if (order == null) {
             throw AppException.notFound("订单不存在");
         }
-        BigDecimal refunded = order.getRefundAmount() == null ? BigDecimal.ZERO : order.getRefundAmount();
-        if (refunded.compareTo(BigDecimal.ZERO) > 0) {
-            throw AppException.conflict("订单已记录退款,请勿重复处理");
+        return refundOrder(orderId, afterSaleId, order.getTotalAmount(), reason);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public OmsRefundLog refundOrder(Long orderId, Long afterSaleId, BigDecimal refundAmount, String reason) {
+        OmsOrder order = orderMapper.selectById(orderId);
+        if (order == null) {
+            throw AppException.notFound("订单不存在");
+        }
+        BigDecimal amount = normalizeRefundAmount(refundAmount);
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw AppException.badRequest("退款金额必须大于0");
+        }
+        if (order.getTotalAmount() == null || order.getTotalAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw AppException.conflict("退款金额超过订单可退金额");
+        }
+        if (afterSaleId != null) {
+            lockAfterSaleForRefund(afterSaleId, order.getId());
+            Long existingCount = refundLogMapper.selectCount(new LambdaQueryWrapper<OmsRefundLog>()
+                    .eq(OmsRefundLog::getAfterSaleId, afterSaleId)
+                    .in(OmsRefundLog::getRefundStatus,
+                            RefundStatusEnum.PENDING.getCode(),
+                            RefundStatusEnum.SUCCESS.getCode()));
+            if (existingCount != null && existingCount > 0) {
+                throw AppException.conflict("该售后单已发起退款,请勿重复处理");
+            }
         }
 
         OmsPayLog payLog = findLatestSuccessLog(order.getId());
@@ -230,11 +266,12 @@ public class PayServiceImpl implements PayService {
         refundLog.setAfterSaleId(afterSaleId);
         refundLog.setUserId(order.getUserId());
         refundLog.setPayType(payLog == null ? null : payLog.getPayType());
-        refundLog.setRefundAmount(order.getTotalAmount());
+        refundLog.setRefundAmount(amount);
         refundLog.setRefundReason(StrUtil.blankToDefault(reason, "管理员同意退款"));
         refundLog.setRefundStatus(RefundStatusEnum.PENDING.getCode());
         refundLog.setCreateTime(LocalDateTime.now());
         refundLogMapper.insert(refundLog);
+        reserveOrderRefundAmount(order.getId(), amount);
 
         if (payLog == null || payLog.getPayType() == null) {
             markRefundSuccess(refundLog.getId(), "LEGACY_REFUND_" + refundLog.getRefundSn());
@@ -247,7 +284,7 @@ public class PayServiceImpl implements PayService {
                 .refundSn(refundLog.getRefundSn())
                 .tradeNo(payLog.getTradeNo())
                 .orderSn(order.getOrderSn())
-                .refundAmount(order.getTotalAmount())
+                .refundAmount(amount)
                 .reason(refundLog.getRefundReason())
                 .payType(payType)
                 .build());
@@ -262,6 +299,20 @@ public class PayServiceImpl implements PayService {
         }
         markRefundSuccess(refundLog.getId(), response.getTradeNo());
         return refundLogMapper.selectById(refundLog.getId());
+    }
+
+    private BigDecimal normalizeRefundAmount(BigDecimal amount) {
+        return amount == null ? BigDecimal.ZERO : amount.setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
+    private void lockAfterSaleForRefund(Long afterSaleId, Long orderId) {
+        OmsAfterSale afterSale = afterSaleMapper.selectOne(new LambdaQueryWrapper<OmsAfterSale>()
+                .eq(OmsAfterSale::getId, afterSaleId)
+                .eq(OmsAfterSale::getOrderId, orderId)
+                .last("limit 1 for update"));
+        if (afterSale == null) {
+            throw AppException.notFound("售后单不存在");
+        }
     }
 
     private OmsOrder requirePayableOrder(PayCreateDTO dto, Long userId) {
@@ -318,6 +369,18 @@ public class PayServiceImpl implements PayService {
                 .eq(OmsPayLog::getPayStatus, PayStatusEnum.SUCCESS.getCode())
                 .orderByDesc(OmsPayLog::getPayTime)
                 .last("limit 1"));
+    }
+
+    private boolean isCallbackAmountValid(OmsPayLog payLog, PayCallbackResult callback) {
+        return callback.getTotalAmount() != null
+                && payLog.getPayAmount() != null
+                && callback.getTotalAmount().compareTo(payLog.getPayAmount()) == 0;
+    }
+
+    private boolean isCallbackTradeNoValid(OmsPayLog payLog, PayCallbackResult callback) {
+        return StrUtil.isBlank(payLog.getTradeNo())
+                || StrUtil.isBlank(callback.getTradeNo())
+                || StrUtil.equals(payLog.getTradeNo(), callback.getTradeNo());
     }
 
     private void closePayLog(Long id, String reason) {
@@ -385,11 +448,19 @@ public class PayServiceImpl implements PayService {
             payLog.setPayStatus(PayStatusEnum.FAILED.getCode());
             return;
         }
-        completePayment(payLog, result.getTradeNo(), result.getRawContent());
-        payLog.setPayStatus(PayStatusEnum.SUCCESS.getCode());
+        if (completePayment(payLog, result.getTradeNo(), result.getRawContent())) {
+            payLog.setPayStatus(PayStatusEnum.SUCCESS.getCode());
+        } else {
+            payLog.setPayStatus(PayStatusEnum.CLOSED.getCode());
+        }
     }
 
-    private void completePayment(OmsPayLog payLog, String tradeNo, String callbackContent) {
+    private boolean completePayment(OmsPayLog payLog, String tradeNo, String callbackContent) {
+        String normalizedTradeNo = StrUtil.isBlank(tradeNo) ? null : tradeNo;
+        if (normalizedTradeNo != null && isTradeNoRecordedByOtherLog(payLog, normalizedTradeNo)) {
+            closePayLog(payLog.getId(), "Third-party trade number already recorded by another pay log");
+            return false;
+        }
         LocalDateTime now = LocalDateTime.now();
         boolean paid = orderMapper.update(null, new LambdaUpdateWrapper<OmsOrder>()
                 .eq(OmsOrder::getId, payLog.getOrderId())
@@ -397,21 +468,43 @@ public class PayServiceImpl implements PayService {
                 .set(OmsOrder::getStatus, OmsOrder.STATUS_PAID)
                 .set(OmsOrder::getPayType, payLog.getPayType())
                 .set(OmsOrder::getPaySn, payLog.getPaySn())
-                .set(OmsOrder::getTradeNo, tradeNo)
+                .set(OmsOrder::getTradeNo, normalizedTradeNo)
                 .set(OmsOrder::getPayTime, now)) > 0;
 
         if (!paid) {
-            OmsOrder order = orderMapper.selectById(payLog.getOrderId());
+            OmsOrder order = orderMapper.selectOne(new LambdaQueryWrapper<OmsOrder>()
+                    .eq(OmsOrder::getId, payLog.getOrderId())
+                    .last("limit 1 for update"));
+            if (isPaidByCurrentLog(order, payLog)) {
+                markPaySuccess(payLog, normalizedTradeNo, callbackContent, now);
+                return true;
+            }
             if (order != null && order.getStatus() != null && order.getStatus() == OmsOrder.STATUS_PAID) {
-                markPaySuccess(payLog, tradeNo, callbackContent, now);
-                return;
+                closePayLog(payLog.getId(), "Order already paid by another pay log");
+                return false;
             }
             throw AppException.conflict("订单状态已变化,支付结果无法入账");
         }
 
-        markPaySuccess(payLog, tradeNo, callbackContent, now);
+        markPaySuccess(payLog, normalizedTradeNo, callbackContent, now);
         closeOtherPendingLogs(payLog);
         increaseProductSales(payLog.getOrderId());
+        return true;
+    }
+
+    private boolean isPaidByCurrentLog(OmsOrder order, OmsPayLog payLog) {
+        return order != null
+                && order.getStatus() != null
+                && order.getStatus() == OmsOrder.STATUS_PAID
+                && StrUtil.equals(order.getPaySn(), payLog.getPaySn());
+    }
+
+    private boolean isTradeNoRecordedByOtherLog(OmsPayLog payLog, String tradeNo) {
+        OmsPayLog existing = payLogMapper.selectOne(new LambdaQueryWrapper<OmsPayLog>()
+                .eq(OmsPayLog::getPayType, payLog.getPayType())
+                .eq(OmsPayLog::getTradeNo, tradeNo)
+                .last("limit 1"));
+        return existing != null && !existing.getId().equals(payLog.getId());
     }
 
     private void markPaySuccess(OmsPayLog payLog, String tradeNo, String callbackContent, LocalDateTime payTime) {
@@ -458,6 +551,16 @@ public class PayServiceImpl implements PayService {
         update.setRefundTime(LocalDateTime.now());
         update.setUpdateTime(LocalDateTime.now());
         refundLogMapper.updateById(update);
+    }
+
+    private void reserveOrderRefundAmount(Long orderId, BigDecimal amount) {
+        int updated = orderMapper.update(null, new LambdaUpdateWrapper<OmsOrder>()
+                .eq(OmsOrder::getId, orderId)
+                .apply("IFNULL(refund_amount, 0) + {0} <= total_amount", amount)
+                .setSql("refund_amount = IFNULL(refund_amount, 0) + " + amount.toPlainString()));
+        if (updated <= 0) {
+            throw AppException.conflict("退款金额超过订单可退金额");
+        }
     }
 
     private PayResponseVO toPayResponse(OmsPayLog payLog) {

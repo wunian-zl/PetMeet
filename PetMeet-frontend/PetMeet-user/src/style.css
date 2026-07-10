@@ -15,35 +15,70 @@ body {
 
 /* 全局消息弹窗样式 */
 .pm-msgbox {
-  border-radius: 16px !important;
+  width: min(460px, calc(100vw - 40px)) !important;
+  border-radius: 14px !important;
   border: none !important;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12) !important;
+  padding: 18px 22px 20px !important;
+  box-shadow: 0 14px 38px rgba(16, 24, 40, 0.18) !important;
 }
 
 .pm-msgbox .el-message-box__header {
-  padding-top: 20px;
+  padding: 0 34px 12px 0;
 }
 
 .pm-msgbox .el-message-box__title {
-  font-size: 18px;
-  font-weight: 600;
+  color: #242832;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.pm-msgbox .el-message-box__headerbtn {
+  top: 18px;
+  right: 18px;
+  width: 28px;
+  height: 28px;
 }
 
 .pm-msgbox .el-message-box__content {
-  padding: 24px 20px;
-  font-size: 15px;
+  padding: 10px 0 20px;
   color: #4b5563;
 }
 
+.pm-msgbox .el-message-box__container {
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.pm-msgbox .el-message-box__status {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.pm-msgbox .el-message-box__message {
+  min-height: 0;
+}
+
+.pm-msgbox .el-message-box__message p {
+  margin: 0;
+  color: #4b5563;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.65;
+}
+
 .pm-msgbox .el-message-box__btns {
-  padding-bottom: 20px;
+  padding: 0;
 }
 
 .pm-msgbox .el-message-box__btns .el-button {
-  border-radius: 8px;
-  padding: 8px 20px;
+  min-width: 92px;
+  height: 40px;
+  border-radius: 10px;
+  padding: 0 22px;
   margin-left: 12px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 650;
 }
 
 .pm-msgbox .el-message-box__btns .el-button--default:hover {

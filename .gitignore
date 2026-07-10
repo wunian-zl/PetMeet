@@ -21,6 +21,10 @@ scripts/ffmpeg_unpack/
 scripts/ffmpeg-release-essentials.zip
 
 # Local runtime and IDE artifacts
+.codex_resume_review_render/
+.reasonix/
+output/
+tmp/
 outputs/
 *.iml
 PetMeet-backend/Redis/dump.rdb

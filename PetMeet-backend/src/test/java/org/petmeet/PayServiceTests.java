@@ -104,6 +104,40 @@ class PayServiceTests {
 
         PmsProduct paidProduct = productMapper.selectById(fixture.productId);
         assertEquals(2, paidProduct.getSales());
+
+        payService.mockConfirm(first.getPaySn());
+
+        OmsOrder orderAfterRepeatedConfirm = orderMapper.selectById(fixture.orderId);
+        assertEquals(first.getPaySn(), orderAfterRepeatedConfirm.getPaySn());
+        assertEquals(OmsOrder.STATUS_PAID, orderAfterRepeatedConfirm.getStatus());
+        PmsProduct productAfterRepeatedConfirm = productMapper.selectById(fixture.productId);
+        assertEquals(2, productAfterRepeatedConfirm.getSales());
+    }
+
+    @Test
+    void competingPendingPayLogIsClosedWithoutSecondSettlement() {
+        TestOrder fixture = createPendingOrder();
+        PayCreateDTO dto = mockPayDto(fixture.orderId);
+        PayResponseVO first = payService.createPay(dto);
+
+        payService.mockConfirm(first.getPaySn());
+
+        OmsPayLog competing = createCompetingPendingPayLog(first.getPaySn());
+        payService.mockConfirm(competing.getPaySn());
+
+        OmsOrder paidOrder = orderMapper.selectById(fixture.orderId);
+        assertEquals(first.getPaySn(), paidOrder.getPaySn());
+
+        OmsPayLog refreshedCompeting = payLogMapper.selectById(competing.getId());
+        assertEquals(PayStatusEnum.CLOSED.getCode(), refreshedCompeting.getPayStatus());
+
+        Long successCount = payLogMapper.selectCount(new LambdaQueryWrapper<OmsPayLog>()
+                .eq(OmsPayLog::getOrderId, fixture.orderId)
+                .eq(OmsPayLog::getPayStatus, PayStatusEnum.SUCCESS.getCode()));
+        assertEquals(1L, successCount);
+
+        PmsProduct paidProduct = productMapper.selectById(fixture.productId);
+        assertEquals(2, paidProduct.getSales());
     }
 
     @Test
@@ -160,6 +194,26 @@ class PayServiceTests {
         dto.setPayType("WECHAT_MOCK");
         dto.setPayMode("QR_CODE");
         return dto;
+    }
+
+    private OmsPayLog createCompetingPendingPayLog(String sourcePaySn) {
+        OmsPayLog source = payLogMapper.selectOne(new LambdaQueryWrapper<OmsPayLog>()
+                .eq(OmsPayLog::getPaySn, sourcePaySn)
+                .last("limit 1"));
+        OmsPayLog competing = new OmsPayLog();
+        competing.setPaySn("PAY_TEST_" + UUID.randomUUID().toString().replace("-", ""));
+        competing.setOrderId(source.getOrderId());
+        competing.setOrderSn(source.getOrderSn());
+        competing.setUserId(source.getUserId());
+        competing.setPayType(source.getPayType());
+        competing.setPayMode(source.getPayMode());
+        competing.setPayAmount(source.getPayAmount());
+        competing.setPayStatus(PayStatusEnum.PENDING.getCode());
+        competing.setQrCodeUrl("petmeet://pay/wechat-mock/" + competing.getPaySn());
+        competing.setExpireTime(LocalDateTime.now().plusMinutes(30));
+        competing.setCreateTime(LocalDateTime.now());
+        payLogMapper.insert(competing);
+        return competing;
     }
 
     private SysUser createUser() {

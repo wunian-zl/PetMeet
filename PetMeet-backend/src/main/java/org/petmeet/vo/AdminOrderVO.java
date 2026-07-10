@@ -51,6 +51,11 @@ public class AdminOrderVO {
         private String reason;
         private String description;
         private List<String> evidenceImages;
+        private BigDecimal afterSaleRefundAmount;
+        private String returnCompany;
+        private String returnTrackingNo;
+        private String exchangeCompany;
+        private String exchangeTrackingNo;
         private Integer status;
         private String statusDesc;
         private BigDecimal refundAmount;

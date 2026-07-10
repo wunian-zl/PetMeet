@@ -90,7 +90,6 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getCategoryList, createCategory, updateCategory, deleteCategory } from '@/api/product'
 import { resolveImageUrl } from '@/utils/image'
@@ -179,7 +178,7 @@ const toCanonicalCategoryIcon = (icon) => {
                 return canonicalPath
             }
             return value
-        } catch (e) {
+        } catch {
             return value
         }
     }

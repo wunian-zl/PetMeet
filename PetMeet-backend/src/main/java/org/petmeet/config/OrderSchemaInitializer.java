@@ -64,6 +64,7 @@ public class OrderSchemaInitializer implements CommandLineRunner {
         );
         ensureIndex("oms_order", "idx_pay_sn", "`pay_sn`");
         createPaymentTables();
+        ensureUniquePayTradeNo();
 
         jdbcTemplate.update("UPDATE `oms_order` SET `user_deleted` = 0 WHERE `user_deleted` IS NULL");
         jdbcTemplate.update("UPDATE `oms_order` SET `admin_deleted` = 0 WHERE `admin_deleted` IS NULL");
@@ -117,7 +118,7 @@ public class OrderSchemaInitializer implements CommandLineRunner {
                     KEY `idx_order_id` (`order_id`),
                     KEY `idx_order_sn` (`order_sn`),
                     KEY `idx_user_id` (`user_id`),
-                    KEY `idx_trade_no` (`trade_no`),
+                    UNIQUE KEY `uk_pay_trade_no` (`pay_type`, `trade_no`),
                     KEY `idx_pay_status` (`pay_status`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='pay log'
                 """);
@@ -147,6 +148,32 @@ public class OrderSchemaInitializer implements CommandLineRunner {
                     KEY `idx_refund_status` (`refund_status`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='refund log'
                 """);
+    }
+
+    private void ensureUniquePayTradeNo() {
+        if (!tableExists("oms_pay_log") || uniqueIndexExists("oms_pay_log", "uk_pay_trade_no")) {
+            return;
+        }
+        jdbcTemplate.update("""
+                UPDATE `oms_pay_log` loser
+                JOIN `oms_pay_log` winner
+                  ON winner.`pay_type` = loser.`pay_type`
+                 AND winner.`trade_no` = loser.`trade_no`
+                 AND (
+                      (winner.`pay_status` = 1 AND loser.`pay_status` <> 1)
+                      OR (winner.`pay_status` = loser.`pay_status` AND winner.`id` < loser.`id`)
+                 )
+                SET loser.`pay_status` = IF(loser.`pay_status` = 1, loser.`pay_status`, 3),
+                    loser.`error_msg` = CONCAT('duplicate third-party trade number:', loser.`trade_no`),
+                    loser.`trade_no` = NULL,
+                    loser.`update_time` = NOW()
+                WHERE loser.`trade_no` IS NOT NULL
+                """);
+        if (indexExists("oms_pay_log", "uk_pay_trade_no")) {
+            jdbcTemplate.execute("ALTER TABLE `oms_pay_log` DROP INDEX `uk_pay_trade_no`");
+        }
+        jdbcTemplate.execute("ALTER TABLE `oms_pay_log` ADD UNIQUE KEY `uk_pay_trade_no` (`pay_type`, `trade_no`)");
+        log.info("宸茶ˉ鍏呯储寮晎}.{}", "oms_pay_log", "uk_pay_trade_no");
     }
 
     private boolean tableExists(String tableName) {
@@ -188,6 +215,16 @@ public class OrderSchemaInitializer implements CommandLineRunner {
     private boolean indexExists(String tableName, String indexName) {
         Integer cnt = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?",
+                Integer.class,
+                tableName,
+                indexName
+        );
+        return cnt != null && cnt > 0;
+    }
+
+    private boolean uniqueIndexExists(String tableName, String indexName) {
+        Integer cnt = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? AND NON_UNIQUE = 0",
                 Integer.class,
                 tableName,
                 indexName

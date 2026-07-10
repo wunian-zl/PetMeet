@@ -85,6 +85,13 @@ public class OrderController {
         return Result.success("订单取消请求已提交", null);
     }
 
+    @PostMapping("/cancel-refund/{id}")
+    @Operation(summary = "Cancel refund request")
+    public Result<Void> cancelRefund(@PathVariable Long id) {
+        orderService.cancelRefund(id);
+        return Result.success("退款申请已取消", null);
+    }
+
     /**
      * 确认收货
      */

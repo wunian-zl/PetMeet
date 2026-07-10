@@ -305,7 +305,7 @@ CREATE TABLE `oms_pay_log` (
     KEY `idx_order_id` (`order_id`),
     KEY `idx_order_sn` (`order_sn`),
     KEY `idx_user_id` (`user_id`),
-    KEY `idx_trade_no` (`trade_no`),
+    UNIQUE KEY `uk_pay_trade_no` (`pay_type`, `trade_no`),
     KEY `idx_pay_status` (`pay_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支付流水表';
 
@@ -350,6 +350,15 @@ CREATE TABLE `oms_after_sale` (
     `reason` VARCHAR(100) DEFAULT NULL COMMENT '申请原因',
     `description` VARCHAR(500) DEFAULT NULL COMMENT '问题描述',
     `evidence_images` TEXT DEFAULT NULL COMMENT '退款凭证图片列表（JSON 数组）',
+    `refund_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT '售后退款金额',
+    `return_address` VARCHAR(500) DEFAULT NULL COMMENT '商家退货地址',
+    `return_company` VARCHAR(100) DEFAULT NULL COMMENT '买家退货物流公司',
+    `return_tracking_no` VARCHAR(100) DEFAULT NULL COMMENT '买家退货物流单号',
+    `return_ship_time` DATETIME DEFAULT NULL COMMENT '买家退货发出时间',
+    `return_receive_time` DATETIME DEFAULT NULL COMMENT '商家确认收货时间',
+    `exchange_company` VARCHAR(100) DEFAULT NULL COMMENT '换货物流公司',
+    `exchange_tracking_no` VARCHAR(100) DEFAULT NULL COMMENT '换货物流单号',
+    `exchange_ship_time` DATETIME DEFAULT NULL COMMENT '换货发货时间',
     `status` TINYINT NOT NULL DEFAULT 0 COMMENT '处理状态：0申请中，1处理中，2已完成，3已拒绝，4已取消',
     `user_deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '用户端逻辑删除标记：0未删除，1已删除',
     `admin_deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '管理端逻辑删除标记：0未删除，1已删除',
@@ -361,11 +370,31 @@ CREATE TABLE `oms_after_sale` (
     KEY `idx_order_id` (`order_id`),
     KEY `idx_order_item_id` (`order_item_id`),
     KEY `idx_status` (`status`),
-    KEY `idx_order_status` (`order_id`, `status`)
+    KEY `idx_order_status` (`order_id`, `status`),
+    KEY `idx_type_status` (`type`, `status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单售后申请表';
 
 -- -------------------------------------------
--- 15. 内容投诉表 cms_complaint
+-- 15. 售后操作日志表 oms_after_sale_log
+-- -------------------------------------------
+DROP TABLE IF EXISTS `oms_after_sale_log`;
+CREATE TABLE `oms_after_sale_log` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '售后操作日志 ID',
+    `after_sale_id` BIGINT NOT NULL COMMENT '售后申请 ID',
+    `from_status` TINYINT DEFAULT NULL COMMENT '变更前状态',
+    `to_status` TINYINT NOT NULL COMMENT '变更后状态',
+    `action` VARCHAR(50) NOT NULL COMMENT '操作类型',
+    `operator_type` VARCHAR(20) NOT NULL COMMENT '操作人类型：admin/user/system',
+    `operator_id` BIGINT DEFAULT NULL COMMENT '操作人 ID',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '操作备注',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_after_sale_id` (`after_sale_id`),
+    KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='售后操作日志表';
+
+-- -------------------------------------------
+-- 16. 内容投诉表 cms_complaint
 -- -------------------------------------------
 DROP TABLE IF EXISTS `cms_complaint`;
 CREATE TABLE `cms_complaint` (

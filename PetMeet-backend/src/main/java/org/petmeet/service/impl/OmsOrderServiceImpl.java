@@ -17,10 +17,12 @@ import org.petmeet.dto.OrderSubmitDTO;
 import org.petmeet.dto.PayCreateDTO;
 import org.petmeet.entity.*;
 import org.petmeet.enums.PayStatusEnum;
+import org.petmeet.mapper.OmsAfterSaleLogMapper;
 import org.petmeet.mapper.OmsAfterSaleMapper;
 import org.petmeet.mapper.OmsOrderItemMapper;
 import org.petmeet.mapper.OmsOrderMapper;
 import org.petmeet.mapper.OmsPayLogMapper;
+import org.petmeet.mapper.OmsRefundLogMapper;
 import org.petmeet.mapper.SysUserMapper;
 import org.petmeet.service.OmsCartItemService;
 import org.petmeet.service.OmsOrderService;
@@ -47,7 +49,9 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
 
     private final OmsOrderItemMapper orderItemMapper;
     private final OmsAfterSaleMapper afterSaleMapper;
+    private final OmsAfterSaleLogMapper afterSaleLogMapper;
     private final OmsPayLogMapper payLogMapper;
+    private final OmsRefundLogMapper refundLogMapper;
     private final OmsCartItemService cartItemService;
     private final PmsProductService productService;
     private final UmsAddressService addressService;
@@ -273,6 +277,84 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
         throw AppException.conflict("当前订单状态不允许取消");
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void cancelRefund(Long orderId) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        OmsOrder order = requireMyOrder(orderId, userId);
+        if (order.getStatus() == null || order.getStatus() != OmsOrder.STATUS_REFUNDING) {
+            throw AppException.conflict("仅退款中的订单可以取消退款申请");
+        }
+
+        Long refundLogCount = refundLogMapper.selectCount(new LambdaQueryWrapper<OmsRefundLog>()
+                .eq(OmsRefundLog::getOrderId, orderId));
+        if (refundLogCount != null && refundLogCount > 0) {
+            throw AppException.conflict("退款已进入支付处理，无法取消");
+        }
+
+        List<OmsAfterSale> activeRefunds = afterSaleMapper.selectList(new LambdaQueryWrapper<OmsAfterSale>()
+                .eq(OmsAfterSale::getOrderId, orderId)
+                .eq(OmsAfterSale::getUserId, userId)
+                .in(OmsAfterSale::getStatus, OmsAfterSale.activeStatuses()));
+        if (activeRefunds == null || activeRefunds.isEmpty()) {
+            throw AppException.conflict("退款申请不存在或已处理");
+        }
+
+        boolean hasUncancelableRefund = activeRefunds.stream().anyMatch(req -> {
+            Integer status = req.getStatus();
+            return status == null
+                    || (status != OmsAfterSale.STATUS_PENDING
+                    && status != OmsAfterSale.STATUS_PROCESSING
+                    && status != OmsAfterSale.STATUS_WAIT_BUYER_RETURN)
+                    || (status == OmsAfterSale.STATUS_PROCESSING && req.getReturnReceiveTime() != null);
+        });
+        if (hasUncancelableRefund) {
+            throw AppException.conflict("退款已进入商家处理流程，无法取消");
+        }
+
+        boolean restored = this.update(new LambdaUpdateWrapper<OmsOrder>()
+                .eq(OmsOrder::getId, orderId)
+                .eq(OmsOrder::getUserId, userId)
+                .eq(OmsOrder::getStatus, OmsOrder.STATUS_REFUNDING)
+                .set(OmsOrder::getStatus, OmsOrder.STATUS_PAID));
+        if (!restored) {
+            throw AppException.conflict("订单状态已变化,请刷新后重试");
+        }
+
+        List<Long> refundIds = activeRefunds.stream()
+                .map(OmsAfterSale::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        int updated = afterSaleMapper.update(null, new LambdaUpdateWrapper<OmsAfterSale>()
+                .in(OmsAfterSale::getId, refundIds)
+                .eq(OmsAfterSale::getOrderId, orderId)
+                .eq(OmsAfterSale::getUserId, userId)
+                .and(w -> w.isNull(OmsAfterSale::getUserDeleted)
+                        .or().eq(OmsAfterSale::getUserDeleted, OmsAfterSale.DELETE_VISIBLE))
+                .in(OmsAfterSale::getStatus,
+                        OmsAfterSale.STATUS_PENDING,
+                        OmsAfterSale.STATUS_PROCESSING,
+                        OmsAfterSale.STATUS_WAIT_BUYER_RETURN)
+                .and(w -> w.ne(OmsAfterSale::getStatus, OmsAfterSale.STATUS_PROCESSING)
+                        .or().isNull(OmsAfterSale::getReturnReceiveTime))
+                .set(OmsAfterSale::getStatus, OmsAfterSale.STATUS_CANCELED)
+                .set(OmsAfterSale::getHandleRemark, "用户已取消退款申请")
+                .set(OmsAfterSale::getHandleTime, LocalDateTime.now()));
+        if (updated != refundIds.size()) {
+            throw AppException.conflict("退款申请状态已变化,请刷新后重试");
+        }
+
+        activeRefunds.forEach(req -> insertAfterSaleLog(req.getId(), req.getStatus(), OmsAfterSale.STATUS_CANCELED,
+                "cancel_refund", "user", userId, "用户已取消退款申请"));
+        notificationService.sendToUser(
+                userId,
+                "退款申请已取消",
+                "订单" + order.getOrderSn() + "退款申请已取消，订单已恢复待发货",
+                "order_refund",
+                order.getId()
+        );
+    }
+
     /**
      * 确认收货
      */
@@ -376,7 +458,7 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
         Long activeAfterSaleCount = afterSaleMapper.selectCount(new LambdaQueryWrapper<OmsAfterSale>()
                 .eq(OmsAfterSale::getOrderId, orderId)
                 .eq(OmsAfterSale::getUserId, userId)
-                .in(OmsAfterSale::getStatus, OmsAfterSale.STATUS_PENDING, OmsAfterSale.STATUS_PROCESSING));
+                .in(OmsAfterSale::getStatus, OmsAfterSale.activeStatuses()));
         if (activeAfterSaleCount != null && activeAfterSaleCount > 0) {
             throw AppException.badRequest("订单存在处理中售后，暂不可删除");
         }
@@ -567,7 +649,7 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
             Long activeCount = afterSaleMapper.selectCount(new LambdaQueryWrapper<OmsAfterSale>()
                     .eq(OmsAfterSale::getUserId, userId)
                     .eq(OmsAfterSale::getOrderItemId, item.getId())
-                    .in(OmsAfterSale::getStatus, OmsAfterSale.STATUS_PENDING, OmsAfterSale.STATUS_PROCESSING));
+                    .in(OmsAfterSale::getStatus, OmsAfterSale.activeStatuses()));
             if (activeCount != null && activeCount > 0) {
                 continue;
             }
@@ -580,10 +662,38 @@ public class OmsOrderServiceImpl extends ServiceImpl<OmsOrderMapper, OmsOrder> i
             afterSale.setType(0);
             afterSale.setReason("已支付订单发货前取消");
             afterSale.setDescription("系统自动创建仅退款申请（由取消订单触发）");
+            afterSale.setRefundAmount(calculateItemAmount(item));
             afterSale.setStatus(OmsAfterSale.STATUS_PENDING);
             afterSale.setCreateTime(LocalDateTime.now());
             afterSaleMapper.insert(afterSale);
+            insertAfterSaleLog(afterSale.getId(), null, OmsAfterSale.STATUS_PENDING,
+                    "auto_refund_apply", userId, "系统自动创建仅退款申请");
         }
+    }
+
+    private BigDecimal calculateItemAmount(OmsOrderItem item) {
+        BigDecimal price = item.getPrice() == null ? BigDecimal.ZERO : item.getPrice();
+        BigDecimal quantity = BigDecimal.valueOf(item.getQuantity() == null ? 0 : item.getQuantity());
+        return price.multiply(quantity).setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
+    private void insertAfterSaleLog(Long afterSaleId, Integer fromStatus, Integer toStatus,
+                                    String action, Long operatorId, String remark) {
+        insertAfterSaleLog(afterSaleId, fromStatus, toStatus, action, "system", operatorId, remark);
+    }
+
+    private void insertAfterSaleLog(Long afterSaleId, Integer fromStatus, Integer toStatus,
+                                    String action, String operatorType, Long operatorId, String remark) {
+        OmsAfterSaleLog log = new OmsAfterSaleLog();
+        log.setAfterSaleId(afterSaleId);
+        log.setFromStatus(fromStatus);
+        log.setToStatus(toStatus);
+        log.setAction(action);
+        log.setOperatorType(operatorType);
+        log.setOperatorId(operatorId);
+        log.setRemark(remark);
+        log.setCreateTime(LocalDateTime.now());
+        afterSaleLogMapper.insert(log);
     }
 
     /**

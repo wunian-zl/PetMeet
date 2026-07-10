@@ -68,7 +68,7 @@
                   v-for="note in myNotes" 
                   :key="note.id" 
                   class="note-card"
-                  @click="router.push(`/note/detail/${note.id}`)"
+                  @click="openNoteDetail(note, $event)"
                 >
                   <div class="card-cover">
                     <img
@@ -135,7 +135,7 @@
                   v-for="note in collectedNotes" 
                   :key="note.id" 
                   class="note-card"
-                  @click="router.push(`/note/detail/${note.id}`)"
+                  @click="openNoteDetail(note, $event)"
                 >
                   <div class="card-cover">
                     <img
@@ -177,7 +177,7 @@
                   v-for="note in likedNotes" 
                   :key="note.id" 
                   class="note-card"
-                  @click="router.push(`/note/detail/${note.id}`)"
+                  @click="openNoteDetail(note, $event)"
                 >
                   <div class="card-cover">
                     <img
@@ -227,7 +227,7 @@
                 <el-tab-pane name="pending_receive">
                   <template #label>
                     <div class="order-tab-label">
-                      <span>待收货</span>
+                      <span>待发货/待收货</span>
                       <span v-if="pendingReceiveOrders.length" class="count">{{ pendingReceiveOrders.length }}</span>
                     </div>
                   </template>
@@ -362,7 +362,7 @@
                         </div>
                       </div>
                       <div v-if="Number(order.status) === 5" class="refund-warning">
-                        退款处理中，请暂停发货并优先处理退款。
+                        退款申请已提交，商家正在处理中
                       </div>
                       <div class="order-actions">
                         <el-button
@@ -379,6 +379,20 @@
                           size="small"
                           @click.stop="handleCancelOrder(order)"
                         >取消订单</el-button>
+                        <el-button
+                          v-if="order.status === 1"
+                          class="pm-btn-ghost"
+                          round
+                          size="small"
+                          @click.stop="handleCancelOrder(order)"
+                        >申请退款</el-button>
+                        <el-button
+                          v-if="order.status === 5"
+                          class="pm-btn-ghost"
+                          round
+                          size="small"
+                          @click.stop="handleCancelRefund(order)"
+                        >取消退款</el-button>
                         <el-button
                           v-if="order.status === 2"
                           class="pm-btn-ghost"
@@ -471,7 +485,7 @@
                           >申请售后</el-button>
                           <div v-else class="after-sale-actions">
                             <el-button link size="small" @click="switchToAfterSaleRecords">查看记录</el-button>
-                            <el-button link size="small" type="danger" @click="handleDeleteAfterSale(entry.activeRequest)">删除</el-button>
+                            <el-button v-if="canDeleteAfterSale(entry.activeRequest)" link size="small" type="danger" @click="handleDeleteAfterSale(entry.activeRequest)">删除</el-button>
                           </div>
                         </div>
                       </div>
@@ -498,9 +512,10 @@
                             {{ getAfterSaleStatusText(req.status, req.statusDesc) }}
                           </span>
                           <div class="after-sale-actions">
-                            <el-button class="pm-btn-ghost" size="small" @click="handleCancelAfterSale(req)">撤销</el-button>
-                            <el-button class="pm-btn-primary" size="small" @click="handleCompleteAfterSale(req)">确认完成</el-button>
-                            <el-button link size="small" type="danger" @click="handleDeleteAfterSale(req)">删除</el-button>
+                            <el-button v-if="canCancelAfterSale(req)" class="pm-btn-ghost" size="small" @click="handleCancelAfterSale(req)">撤销</el-button>
+                            <el-button v-if="canSubmitReturnLogistics(req)" class="pm-btn-primary" size="small" @click="openReturnLogisticsDialog(req)">填写物流</el-button>
+                            <el-button v-if="canCompleteAfterSale(req)" class="pm-btn-primary" size="small" @click="handleCompleteAfterSale(req)">确认完成</el-button>
+                            <el-button v-if="canDeleteAfterSale(req)" link size="small" type="danger" @click="handleDeleteAfterSale(req)">删除</el-button>
                           </div>
                         </div>
                       </div>
@@ -537,7 +552,7 @@
                             {{ getAfterSaleStatusText(req.status, req.statusDesc) }}
                           </span>
                           <div class="after-sale-actions">
-                            <el-button link size="small" type="danger" @click="handleDeleteAfterSale(req)">删除</el-button>
+                            <el-button v-if="canDeleteAfterSale(req)" link size="small" type="danger" @click="handleDeleteAfterSale(req)">删除</el-button>
                           </div>
                         </div>
                       </div>
@@ -630,8 +645,11 @@
             </div>
             
             <div class="detail-footer">
-              <span class="label">实付金额:</span>
-              <span class="amount">¥{{ Number(orderDetail.totalAmount || 0).toFixed(2) }}</span>
+              <el-button class="pm-btn-ghost detail-close-btn" round @click="orderDetailVisible = false">关闭</el-button>
+              <div class="detail-total">
+                <span class="label">实付金额:</span>
+                <span class="amount">¥{{ Number(orderDetail.totalAmount || 0).toFixed(2) }}</span>
+              </div>
             </div>
           </template>
         </div>
@@ -715,6 +733,30 @@
         <template #footer>
           <el-button @click="afterSaleApplyDialogVisible = false">取消</el-button>
           <el-button class="pm-btn-primary" :loading="afterSaleSubmitting" @click="submitAfterSale">提交申请</el-button>
+        </template>
+      </el-dialog>
+
+  <!-- 退货物流弹窗 -->
+      <el-dialog v-model="returnLogisticsDialogVisible" title="填写退货物流" width="460px" destroy-on-close align-center class="custom-dialog after-sale-dialog">
+        <div v-if="returnLogisticsTarget" class="after-sale-target">
+          <img v-if="returnLogisticsTarget.productImg" :src="getImageUrl(returnLogisticsTarget.productImg)" />
+          <div class="target-info">
+            <div class="name">{{ returnLogisticsTarget.productName }}</div>
+            <div class="meta">订单号: {{ returnLogisticsTarget.orderSn }}</div>
+            <div class="meta" v-if="returnLogisticsTarget.returnAddress">退货地址: {{ returnLogisticsTarget.returnAddress }}</div>
+          </div>
+        </div>
+        <el-form ref="returnLogisticsFormRef" :model="returnLogisticsForm" :rules="returnLogisticsRules" label-width="90px" label-position="left">
+          <el-form-item label="物流公司" prop="company">
+            <el-input v-model="returnLogisticsForm.company" placeholder="例如：顺丰速运" />
+          </el-form-item>
+          <el-form-item label="物流单号" prop="trackingNo">
+            <el-input v-model="returnLogisticsForm.trackingNo" placeholder="请输入退货物流单号" />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="returnLogisticsDialogVisible = false">取消</el-button>
+          <el-button class="pm-btn-primary" :loading="returnLogisticsSubmitting" @click="submitReturnLogistics">提交物流</el-button>
         </template>
       </el-dialog>
 
@@ -856,6 +898,14 @@
           <el-image :src="displayAvatar" fit="contain" />
         </div>
       </el-dialog>
+
+      <NoteDetail
+        v-if="showNoteDetail"
+        :noteId="currentNoteId"
+        :initialNote="currentNote"
+        :originRect="noteOriginRect"
+        @close="closeNoteDetail"
+      />
     </template>
   </div>
 </template>
@@ -876,6 +926,7 @@ import {
 } from '@element-plus/icons-vue'
 import HeartIcon from '@/components/HeartIcon.vue'
 import AuthRequiredState from '@/components/AuthRequiredState.vue'
+import NoteDetail from './NoteDetail.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -884,13 +935,98 @@ const PROFILE_TABS = ['notes', 'collections', 'likes', 'orders', 'address']
 const ORDER_SUB_TABS = ['pending_pay', 'pending_receive', 'pending_review', 'after_sale', 'all']
 const AFTER_SALE_TABS = ['apply', 'processing', 'records']
 const normalizeProfileTab = (tab) => (PROFILE_TABS.includes(tab) ? tab : 'notes')
+const isCurrentProfileRoute = () => route.name === 'Profile' || route.path === '/profile'
 const activeTab = ref(normalizeProfileTab(route.query.tab))
 const tabBarReady = ref(false)
 const displayAvatar = computed(() => getAvatarUrl(userStore.userInfo.avatar))
+const showNoteDetail = ref(false)
+const currentNoteId = ref(null)
+const currentNote = ref(null)
+const noteOriginRect = ref(null)
+let closeNoteDetailTimer = null
 
 const resolveNoteCardImage = (note) => {
   if (!note) return getImageUrl('')
   return getImageUrl(note.coverThumb || note.coverImg)
+}
+
+const buildInitialNotePayload = (note) => {
+  if (!note) return null
+  const coverImg = resolveNoteCardImage(note)
+  return {
+    ...note,
+    coverImg,
+    images: coverImg ? [coverImg] : [],
+    authorAvatar: getAvatarUrl(note.authorAvatar),
+    authorName: note.authorName || note.authorNickname || '用户'
+  }
+}
+
+const getNoteCardOriginRect = (event) => {
+  let target = event?.currentTarget || null
+  if (target && !target.classList?.contains('note-card')) {
+    target = target.closest?.('.note-card') || target
+  }
+  const rectSource = target?.querySelector?.('.card-cover') || target
+  if (!rectSource) return null
+  const rect = rectSource.getBoundingClientRect()
+  return {
+    top: rect.top,
+    left: rect.left,
+    width: rect.width,
+    height: rect.height,
+    radius: 12
+  }
+}
+
+const openNoteDetail = (note, event) => {
+  const id = note?.id
+  if (!id) return
+  if (closeNoteDetailTimer) {
+    clearTimeout(closeNoteDetailTimer)
+    closeNoteDetailTimer = null
+  }
+  noteOriginRect.value = getNoteCardOriginRect(event)
+  currentNoteId.value = id
+  currentNote.value = buildInitialNotePayload(note)
+  showNoteDetail.value = true
+
+  const detailHref = router.resolve({
+    name: 'NoteDetail',
+    params: { id },
+    query: { tab: activeTab.value }
+  }).href
+  window.history.pushState({ profileNoteId: id }, '', detailHref)
+}
+
+const closeNoteDetail = () => {
+  showNoteDetail.value = false
+  if (closeNoteDetailTimer) {
+    clearTimeout(closeNoteDetailTimer)
+  }
+  closeNoteDetailTimer = window.setTimeout(() => {
+    if (!showNoteDetail.value) {
+      currentNoteId.value = null
+      currentNote.value = null
+      noteOriginRect.value = null
+    }
+    closeNoteDetailTimer = null
+  }, 320)
+
+  const profileHref = router.resolve({
+    name: 'Profile',
+    query: { tab: activeTab.value }
+  }).href
+  window.history.pushState({}, '', profileHref)
+}
+
+const handleProfilePopState = () => {
+  if (showNoteDetail.value) {
+    showNoteDetail.value = false
+    currentNoteId.value = null
+    currentNote.value = null
+    noteOriginRect.value = null
+  }
 }
 
 const handleNoteCardImageError = (event, note) => {
@@ -1468,6 +1604,16 @@ const getAfterSales = async (options = {}) => {
   }
 }
 
+const refreshOrderWorkbench = async (options = {}) => {
+  const loadOptions = { silent: true, ...options }
+  await Promise.all([
+    getOrders(loadOptions),
+    getAfterSales(loadOptions),
+    userStore.fetchUnpaidOrderCount({ silentError: true }),
+    refreshAfterSaleUnreadCount(loadOptions)
+  ])
+}
+
 const unpaidCount = computed(() => userStore.unpaidOrderCount || 0)
 
 const pendingPayOrders = computed(() => (Array.isArray(orderList.value)
@@ -1551,6 +1697,8 @@ const syncSelectedOrderIds = () => {
 
 const nowTimestamp = ref(Date.now())
 let countdownTimer = null
+let expiredPendingPayRefreshRunning = false
+let lastExpiredPendingPayRefreshAt = 0
 
 const getOrderExpireTime = (order) => {
   if (!order) return null
@@ -1561,6 +1709,26 @@ const getOrderExpireTime = (order) => {
   const createTs = new Date(order.createTime).getTime()
   if (Number.isNaN(createTs)) return null
   return createTs + 30 * 60 * 1000
+}
+
+const hasExpiredPendingPayOrder = () => {
+  const orders = Array.isArray(orderList.value) ? orderList.value : []
+  return orders.some((order) => {
+    const expireTs = getOrderExpireTime(order)
+    return Number(order?.status) === 0 && expireTs && expireTs <= nowTimestamp.value
+  })
+}
+
+const refreshExpiredPendingPayOrders = async () => {
+  const now = Date.now()
+  if (expiredPendingPayRefreshRunning || now - lastExpiredPendingPayRefreshAt < 30000) return
+  expiredPendingPayRefreshRunning = true
+  lastExpiredPendingPayRefreshAt = now
+  try {
+    await refreshOrderWorkbench()
+  } finally {
+    expiredPendingPayRefreshRunning = false
+  }
 }
 
 const formatPayCountdown = (order) => {
@@ -1656,18 +1824,38 @@ const handlePay = async (row) => {
 
 const handleCancelOrder = async (row) => {
   if (!row?.id) return
+  const isPaidPendingShip = Number(row.status) === 1
+  const message = isPaidPendingShip
+    ? '该订单已付款但尚未发货，申请退款后会进入退款处理中，确定继续吗？'
+    : '确定取消该订单吗?'
+  const successMessage = isPaidPendingShip ? '退款申请已提交' : '订单已取消'
   try {
-    await ElMessageBox.confirm('确定取消该订单吗?', '提示', {
+    await ElMessageBox.confirm(message, '提示', {
       type: 'warning',
       customClass: 'pm-msgbox',
       confirmButtonClass: 'pm-btn-primary',
     })
     await request.post(`/order/cancel/${row.id}`)
-    ElMessage.success('订单已取消')
+    ElMessage.success(successMessage)
     orderDetailVisible.value = false
     orderDetail.value = null
-    await getOrders()
-    await userStore.fetchUnpaidOrderCount()
+    await refreshOrderWorkbench()
+  } catch (e) {}
+}
+
+const handleCancelRefund = async (row) => {
+  if (!row?.id) return
+  try {
+    await ElMessageBox.confirm('确定取消退款申请吗？取消后订单将恢复为待发货。', '取消退款', {
+      type: 'warning',
+      customClass: 'pm-msgbox',
+      confirmButtonClass: 'pm-btn-primary',
+    })
+    await request.post(`/order/cancel-refund/${row.id}`)
+    ElMessage.success('退款申请已取消')
+    orderDetailVisible.value = false
+    orderDetail.value = null
+    await refreshOrderWorkbench()
   } catch (e) {}
 }
 
@@ -1681,7 +1869,7 @@ const handleConfirmReceipt = async (row) => {
     })
     await request.post(`/order/confirm/${row.id}`)
     ElMessage.success('已确认收货')
-    getOrders()
+    await refreshOrderWorkbench()
   } catch (e) {}
 }
 
@@ -1931,10 +2119,23 @@ const afterSaleForm = reactive({
   evidenceImages: []
 })
 const afterSaleEvidenceFileList = ref([])
+const returnLogisticsDialogVisible = ref(false)
+const returnLogisticsSubmitting = ref(false)
+const returnLogisticsFormRef = ref(null)
+const returnLogisticsTarget = ref(null)
+const returnLogisticsForm = reactive({
+  company: '',
+  trackingNo: ''
+})
 
 const afterSaleRules = {
   type: [{ required: true, message: '请选择售后类型', trigger: 'change' }],
   reason: [{ required: true, message: '请选择原因', trigger: 'change' }]
+}
+
+const returnLogisticsRules = {
+  company: [{ required: true, message: '请输入物流公司', trigger: 'blur' }],
+  trackingNo: [{ required: true, message: '请输入物流单号', trigger: 'blur' }]
 }
 
 const afterSaleTypeOptions = [
@@ -1958,7 +2159,7 @@ const afterSaleActiveMap = computed(() => {
   list.sort((a, b) => new Date(b.createTime || 0).getTime() - new Date(a.createTime || 0).getTime())
   list.forEach(req => {
     const key = Number(req.orderItemId)
-    if ([0, 1].includes(Number(req.status)) && !Number.isNaN(key)) {
+    if (isActiveAfterSaleStatus(req.status) && !Number.isNaN(key)) {
       if (!map.has(key)) {
         map.set(key, req)
       }
@@ -1987,7 +2188,7 @@ const afterSaleApplyItems = computed(() => {
 
 const afterSaleProcessingList = computed(() => {
   const list = Array.isArray(afterSaleList.value) ? afterSaleList.value : []
-  return list.filter(req => [0, 1].includes(Number(req.status)))
+  return list.filter(req => isActiveAfterSaleStatus(req.status))
 })
 
 const afterSaleRecordList = computed(() => {
@@ -1996,9 +2197,18 @@ const afterSaleRecordList = computed(() => {
 })
 
 const getAfterSaleStatusText = (status, statusDesc = '') => {
-  const map = { 0: '申请中', 1: '处理中', 2: '已完成', 3: '已拒绝', 4: '已取消' }
+  const map = { 0: '申请中', 1: '处理中', 2: '已完成', 3: '已拒绝', 4: '已取消', 5: '待买家退货', 6: '待商家收货', 7: '退款中', 8: '换货已发货' }
   return localizeStatusDesc(statusDesc, map[status] || '处理中')
 }
+
+const isActiveAfterSaleStatus = (status) => [0, 1, 5, 6, 7, 8].includes(Number(status))
+const canCancelAfterSale = (row) => {
+  const status = Number(row?.status)
+  return status === 0 || status === 5 || (status === 1 && !row?.returnReceiveTime)
+}
+const canSubmitReturnLogistics = (row) => Number(row?.status) === 5
+const canCompleteAfterSale = (row) => Number(row?.status) === 8
+const canDeleteAfterSale = (row) => [2, 3, 4].includes(Number(row?.status))
 
 const getAfterSaleTypeText = (type) => {
   const map = { 0: '仅退款', 1: '退货退款', 2: '换货' }
@@ -2052,8 +2262,7 @@ const submitAfterSale = async () => {
       await request.post('/after-sale/apply', { ...afterSaleForm })
       ElMessage.success('售后申请已提交')
       afterSaleApplyDialogVisible.value = false
-      getAfterSales()
-      refreshAfterSaleUnreadCount()
+      await refreshOrderWorkbench()
     } finally {
       afterSaleSubmitting.value = false
     }
@@ -2070,12 +2279,16 @@ const handleCancelAfterSale = async (row) => {
     })
     await request.post(`/after-sale/cancel/${row.id}`)
     ElMessage.success('已撤销')
-    getAfterSales()
+    await refreshOrderWorkbench()
   } catch (e) {}
 }
 
 const handleCompleteAfterSale = async (row) => {
   if (!row?.id) return
+  if (!canCompleteAfterSale(row)) {
+    ElMessage.warning('仅换货已发货后可确认完成')
+    return
+  }
   try {
     await ElMessageBox.confirm('确认该售后已完成?', '确认完成', {
       type: 'warning',
@@ -2084,8 +2297,35 @@ const handleCompleteAfterSale = async (row) => {
     })
     await request.post(`/after-sale/complete/${row.id}`)
     ElMessage.success('已完成')
-    getAfterSales()
+    await refreshOrderWorkbench()
   } catch (e) {}
+}
+
+const openReturnLogisticsDialog = (row) => {
+  if (!row?.id) return
+  returnLogisticsTarget.value = row
+  returnLogisticsForm.company = ''
+  returnLogisticsForm.trackingNo = ''
+  returnLogisticsDialogVisible.value = true
+}
+
+const submitReturnLogistics = async () => {
+  if (!returnLogisticsFormRef.value || !returnLogisticsTarget.value?.id) return
+  await returnLogisticsFormRef.value.validate(async (valid) => {
+    if (!valid) return
+    returnLogisticsSubmitting.value = true
+    try {
+      await request.post(`/after-sale/${returnLogisticsTarget.value.id}/return-logistics`, {
+        company: returnLogisticsForm.company.trim(),
+        trackingNo: returnLogisticsForm.trackingNo.trim()
+      })
+      ElMessage.success('退货物流已提交')
+      returnLogisticsDialogVisible.value = false
+      await refreshOrderWorkbench()
+    } finally {
+      returnLogisticsSubmitting.value = false
+    }
+  })
 }
 
 const handleDeleteAfterSale = async (row) => {
@@ -2104,8 +2344,7 @@ const handleDeleteAfterSale = async (row) => {
     )
     await request.delete(`/after-sale/${row.id}`)
     ElMessage.success('售后申请已删除')
-    await getAfterSales()
-    await refreshAfterSaleUnreadCount()
+    await refreshOrderWorkbench()
   } catch (e) {}
 }
 
@@ -2115,6 +2354,7 @@ const switchToAfterSaleRecords = () => {
 
 watch(orderSubTab, (val) => {
   syncSelectedOrderIds()
+  if (!isCurrentProfileRoute()) return
   if (!userStore.isLoggedIn) return
   if (val === 'after_sale') {
     const targetAfterSaleTab = normalizeAfterSaleTab(route.query.afterSaleTab)
@@ -2315,6 +2555,7 @@ const handleTabClick = (pane) => {
 }
 
 watch(activeTab, (val) => {
+    if (!isCurrentProfileRoute()) return
     if (!PROFILE_TABS.includes(val)) return
     if (route.query.tab === val) return
     router.replace({
@@ -2324,6 +2565,7 @@ watch(activeTab, (val) => {
 })
 
 watch(() => route.query.tab, (tab) => {
+    if (!isCurrentProfileRoute()) return
     if (PROFILE_TABS.includes(tab) && tab !== activeTab.value) {
         activeTab.value = tab
         if (tab === 'orders') {
@@ -2343,6 +2585,7 @@ watch(() => route.query.tab, (tab) => {
 })
 
 watch(() => route.query.orderSubTab, (tab) => {
+    if (!isCurrentProfileRoute()) return
     const normalized = normalizeOrderSubTab(tab)
     if (!normalized) return
     if (activeTab.value !== 'orders') return
@@ -2351,6 +2594,7 @@ watch(() => route.query.orderSubTab, (tab) => {
 })
 
 watch(() => route.query.afterSaleTab, (tab) => {
+    if (!isCurrentProfileRoute()) return
     const normalized = normalizeAfterSaleTab(tab)
     if (!normalized) return
     if (activeTab.value !== 'orders' || orderSubTab.value !== 'after_sale') return
@@ -2359,12 +2603,14 @@ watch(() => route.query.afterSaleTab, (tab) => {
 })
 
 watch(() => route.query.orderId, (orderId) => {
+    if (!isCurrentProfileRoute()) return
     if (!userStore.isLoggedIn) return
     if (!orderId) return
     openOrderDetailFromRoute(orderId)
 })
 
 watch(() => route.query.refresh, async (refresh) => {
+    if (!isCurrentProfileRoute()) return
     if (!userStore.isLoggedIn) return
     if (!refresh) return
     await refreshOrdersAfterExternalChange()
@@ -2476,8 +2722,12 @@ onMounted(async () => {
     window.addEventListener('petmeet:note-published', handleMyNotesChanged)
     window.addEventListener('petmeet:follow-changed', handleFollowChanged)
     window.addEventListener('storage', handleSeededOrderStorageChange)
+    window.addEventListener('popstate', handleProfilePopState)
     countdownTimer = window.setInterval(() => {
       nowTimestamp.value = Date.now()
+      if (isCurrentProfileRoute() && activeTab.value === 'orders' && hasExpiredPendingPayOrder()) {
+        refreshExpiredPendingPayOrders()
+      }
     }, 1000)
     if (userStore.token) {
         userStore.fetchUnpaidOrderCount()
@@ -2513,6 +2763,11 @@ onBeforeUnmount(() => {
   window.removeEventListener('petmeet:note-published', handleMyNotesChanged)
   window.removeEventListener('petmeet:follow-changed', handleFollowChanged)
   window.removeEventListener('storage', handleSeededOrderStorageChange)
+  window.removeEventListener('popstate', handleProfilePopState)
+  if (closeNoteDetailTimer) {
+    window.clearTimeout(closeNoteDetailTimer)
+    closeNoteDetailTimer = null
+  }
   if (countdownTimer) {
     window.clearInterval(countdownTimer)
     countdownTimer = null
@@ -3617,9 +3872,18 @@ onBeforeUnmount(() => {
 }
 
 .detail-footer {
-  text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   border-top: 1px solid #eee;
   padding-top: 16px;
+  .detail-close-btn {
+    min-width: 86px;
+  }
+  .detail-total {
+    text-align: right;
+  }
   .label { color: #666; margin-right: 10px; }
   .amount { font-size: 20px; color: #f56c6c; font-weight: 700; }
 }

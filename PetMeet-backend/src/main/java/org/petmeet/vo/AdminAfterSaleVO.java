@@ -34,7 +34,23 @@ public class AdminAfterSaleVO {
     private String reason;
     private String description;
     private List<String> evidenceImages;
+    private BigDecimal refundAmount;
+    private String returnAddress;
+    private String returnCompany;
+    private String returnTrackingNo;
+    private LocalDateTime returnShipTime;
+    private LocalDateTime returnReceiveTime;
+    private String exchangeCompany;
+    private String exchangeTrackingNo;
+    private LocalDateTime exchangeShipTime;
     private String handleRemark;
+    private String refundSn;
+    private Integer refundStatus;
+    private String refundStatusDesc;
+    private String refundTradeNo;
+    private LocalDateTime refundTime;
+    private String refundErrorMsg;
+    private List<AfterSaleLogVO> logs;
 
     private LocalDateTime createTime;
     private LocalDateTime handleTime;

@@ -13,41 +13,11 @@
         active-text-color="var(--admin-sidebar-active)"
         router
       >
-        <el-menu-item index="/admin/dashboard">
-          <el-icon><Odometer /></el-icon>
-          <span>仪表盘</span>
-        </el-menu-item>
-        <el-menu-item index="/admin/user">
-          <el-icon><User /></el-icon>
-          <span>用户管理</span>
-        </el-menu-item>
-        <el-menu-item index="/admin/content">
-          <el-icon><DocumentChecked /></el-icon>
-          <span>内容管理</span>
-        </el-menu-item>
-        <el-menu-item index="/admin/complaint">
-          <el-icon><Warning /></el-icon>
-          <span>投诉管理</span>
-        </el-menu-item>
-        <el-menu-item index="/admin/category">
-          <el-icon><Menu /></el-icon>
-          <span>分类管理</span>
-        </el-menu-item>
-        <el-menu-item index="/admin/product">
-          <el-icon><Goods /></el-icon>
-          <span>商品管理</span>
-        </el-menu-item>
-        <el-menu-item index="/admin/order">
-          <el-icon><List /></el-icon>
-          <span>订单管理</span>
-        </el-menu-item>
-        <el-menu-item index="/admin/after-sale">
-          <el-icon><Service /></el-icon>
-          <span>售后管理</span>
-        </el-menu-item>
-        <el-menu-item index="/admin/banner">
-          <el-icon><Picture /></el-icon>
-          <span>广告管理</span>
+        <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
+          <el-icon>
+            <component :is="item.icon" />
+          </el-icon>
+          <span>{{ item.title }}</span>
         </el-menu-item>
       </el-menu>
     </div>
@@ -59,7 +29,13 @@
         <div class="breadcrumb">
           <el-breadcrumb separator="/">
             <el-breadcrumb-item :to="{ path: '/admin' }">首页</el-breadcrumb-item>
-            <el-breadcrumb-item>{{ $route.meta.title }}</el-breadcrumb-item>
+            <el-breadcrumb-item
+              v-for="item in breadcrumbs"
+              :key="item.path || item.title"
+              :to="item.path ? { path: item.path } : undefined"
+            >
+              {{ item.title }}
+            </el-breadcrumb-item>
           </el-breadcrumb>
         </div>
         <div class="user-info">
@@ -91,12 +67,47 @@
 
 <script setup>
 import { Odometer, User, DocumentChecked, Goods, List, Menu, Warning, Picture, Service } from '@element-plus/icons-vue'
-import { useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAdminStore } from '@/store/admin'
 import BeianFooter from '@/components/BeianFooter.vue'
 
 const router = useRouter()
+const route = useRoute()
 const adminStore = useAdminStore()
+
+const iconMap = {
+  Odometer,
+  User,
+  DocumentChecked,
+  Goods,
+  List,
+  Menu,
+  Warning,
+  Picture,
+  Service
+}
+
+const adminRoute = router.options.routes.find(item => item.path === '/admin')
+
+const menuItems = computed(() => {
+  return (adminRoute?.children || [])
+    .filter(item => item.meta?.title && item.path)
+    .map(item => ({
+      path: `/admin/${item.path}`,
+      title: item.meta.title,
+      icon: iconMap[item.meta.icon] || Menu
+    }))
+})
+
+const breadcrumbs = computed(() => {
+  return route.matched
+    .filter(item => item.path !== '/admin' && item.meta?.title)
+    .map(item => ({
+      path: item.path.includes(':') ? '' : item.path,
+      title: item.meta.title
+    }))
+})
 
 const handleCommand = (command) => {
   if (command === 'logout') {

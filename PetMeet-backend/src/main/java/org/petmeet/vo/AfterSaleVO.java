@@ -26,7 +26,17 @@ public class AfterSaleVO {
     private String reason;
     private String description;
     private List<String> evidenceImages;
+    private BigDecimal refundAmount;
+    private String returnAddress;
+    private String returnCompany;
+    private String returnTrackingNo;
+    private LocalDateTime returnShipTime;
+    private LocalDateTime returnReceiveTime;
+    private String exchangeCompany;
+    private String exchangeTrackingNo;
+    private LocalDateTime exchangeShipTime;
     private String handleRemark;
+    private List<AfterSaleLogVO> logs;
     private LocalDateTime createTime;
     private LocalDateTime handleTime;
 }

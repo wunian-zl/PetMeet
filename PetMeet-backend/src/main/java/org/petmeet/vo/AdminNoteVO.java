@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 管理端笔记视图对象
@@ -26,6 +27,9 @@ public class AdminNoteVO {
 
     @Schema(description = "封面图")
     private String cover;
+
+    @Schema(description = "图片列表")
+    private List<String> images;
 
     @Schema(description = "类型:image/video")
     private String type;

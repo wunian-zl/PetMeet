@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS `oms_pay_log` (
     KEY `idx_order_id` (`order_id`),
     KEY `idx_order_sn` (`order_sn`),
     KEY `idx_user_id` (`user_id`),
-    KEY `idx_trade_no` (`trade_no`),
+    UNIQUE KEY `uk_pay_trade_no` (`pay_type`, `trade_no`),
     KEY `idx_pay_status` (`pay_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支付流水表';
 
@@ -90,3 +90,31 @@ SELECT IF(
 PREPARE stmt FROM @sql_add_remark; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 UPDATE `oms_order` SET `refund_amount` = 0.00 WHERE `refund_amount` IS NULL;
+
+UPDATE `oms_pay_log` loser
+JOIN `oms_pay_log` winner
+  ON winner.`pay_type` = loser.`pay_type`
+ AND winner.`trade_no` = loser.`trade_no`
+ AND (
+      (winner.`pay_status` = 1 AND loser.`pay_status` <> 1)
+      OR (winner.`pay_status` = loser.`pay_status` AND winner.`id` < loser.`id`)
+ )
+SET loser.`pay_status` = IF(loser.`pay_status` = 1, loser.`pay_status`, 3),
+    loser.`error_msg` = CONCAT('duplicate third-party trade number:', loser.`trade_no`),
+    loser.`trade_no` = NULL,
+    loser.`update_time` = NOW()
+WHERE loser.`trade_no` IS NOT NULL;
+
+SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'oms_pay_log' AND INDEX_NAME = 'uk_pay_trade_no' AND NON_UNIQUE = 1),
+    'ALTER TABLE `oms_pay_log` DROP INDEX `uk_pay_trade_no`',
+    'SELECT 1'
+) INTO @sql_drop_non_unique_pay_trade_no;
+PREPARE stmt FROM @sql_drop_non_unique_pay_trade_no; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'oms_pay_log' AND INDEX_NAME = 'uk_pay_trade_no' AND NON_UNIQUE = 0),
+    'SELECT 1',
+    'ALTER TABLE `oms_pay_log` ADD UNIQUE KEY `uk_pay_trade_no` (`pay_type`, `trade_no`)'
+) INTO @sql_add_uk_pay_trade_no;
+PREPARE stmt FROM @sql_add_uk_pay_trade_no; EXECUTE stmt; DEALLOCATE PREPARE stmt;

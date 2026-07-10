@@ -273,7 +273,7 @@ const fetchList = async () => {
       tableData.value = []
       total.value = 0
     }
-  } catch (e) {
+  } catch {
     tableData.value = []
     total.value = 0
   } finally {
@@ -454,7 +454,7 @@ const customUploadImage = async (options) => {
   try {
     const url = await uploadImage(file, 'shopBannerImage')
     onSuccess({ code: 200, data: url })
-  } catch (e) {
+  } catch {
     onError(e)
   }
 }
@@ -507,7 +507,7 @@ const handleSave = async () => {
           fetchList()
         }
       }
-    } catch (e) {
+    } catch {
       // 这里交给拦截器统一处理
     } finally {
       saving.value = false
@@ -522,7 +522,7 @@ const handleToggleStatus = async (row, enabled) => {
       ElMessage.success(enabled ? '已启用' : '已禁用')
       fetchList()
     }
-  } catch (e) {}
+  } catch {}
 }
 
 const handleDelete = async (row) => {
@@ -532,7 +532,7 @@ const handleDelete = async (row) => {
       ElMessage.success('已删除')
       fetchList()
     }
-  } catch (e) {}
+  } catch {}
 }
 
 const loadCategories = async () => {
@@ -543,7 +543,7 @@ const loadCategories = async () => {
     } else {
       categoryOptions.value = []
     }
-  } catch (e) {
+  } catch {
     categoryOptions.value = []
   }
 }

@@ -33,7 +33,7 @@ export const useAdminStore = defineStore('admin', {
         async logout() {
             try {
                 await logoutApi()
-            } catch (e) {
+            } catch {
                 // 即使API调用失败也清除本地状态
             }
             this.token = ''

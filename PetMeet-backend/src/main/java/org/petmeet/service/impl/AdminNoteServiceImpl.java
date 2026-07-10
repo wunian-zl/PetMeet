@@ -3,6 +3,7 @@ package org.petmeet.service.impl;
 import org.petmeet.common.AppException;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.alibaba.fastjson2.JSON;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
@@ -399,6 +401,7 @@ public class AdminNoteServiceImpl implements AdminNoteService {
         BeanUtil.copyProperties(note, vo);
         // 字段名不同：CmsNote.coverImg -> AdminNoteVO.cover
         vo.setCover(note.getCoverImg());
+        vo.setImages(parseImages(note));
         vo.setCategory(note.getCategory());
         vo.setTags(note.getTags());
 
@@ -426,5 +429,23 @@ public class AdminNoteServiceImpl implements AdminNoteService {
         vo.setCommentCount(commentCount);
 
         return vo;
+    }
+
+    private List<String> parseImages(CmsNote note) {
+        List<String> images = new ArrayList<>();
+        if (StrUtil.isNotBlank(note.getImages())) {
+            try {
+                images.addAll(JSON.parseArray(note.getImages(), String.class).stream()
+                        .filter(StrUtil::isNotBlank)
+                        .distinct()
+                        .toList());
+            } catch (Exception e) {
+                log.warn("解析笔记图片列表失败，noteId={}", note.getId(), e);
+            }
+        }
+        if (images.isEmpty() && StrUtil.isNotBlank(note.getCoverImg())) {
+            images.add(note.getCoverImg());
+        }
+        return images;
     }
 }
